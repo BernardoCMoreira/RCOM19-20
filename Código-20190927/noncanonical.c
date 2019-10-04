@@ -13,6 +13,13 @@
 #define _POSIX_SOURCE 1 /* POSIX compliant source */
 #define FALSE 0
 #define TRUE 1
+#define START 0
+#define FLAG_RCV 1
+#define A_RCV 2
+#define C_RCV 3
+#define BCC_RCV 4
+#define STOP_S 5
+
 
 volatile int STOP=FALSE;
 
@@ -21,6 +28,7 @@ int main(int argc, char** argv)
     int fd,c, res;
     struct termios oldtio,newtio;
     char buf[255];
+    int state = 0;
 
     if ( (argc < 2) || 
   	     ((strcmp("/dev/ttyS0", argv[1])!=0) && 
@@ -77,12 +85,62 @@ int main(int argc, char** argv)
     while (STOP==FALSE) {       /* loop for input */
 
       res = read(fd,buf,255);   /* returns after 5 chars have been input */
+      
+      
+      switch(state){
+		  
+		case START:
+			if(buf[res]==0x7E)
+				state=FLAG_RCV;
+			else
+				state=START;
+				
+			break;
+			
+		case FLAG_RCV:
+			if(buf[res] == 0x03)
+				state=A_RCV;
+			else if(buf[res] == 0x7E)
+				state=FLAG_RCV;
+			else
+				state=START;
+			break;
+		
+		case A_RCV:
+			if(buf[res] == 0x03)
+				state = C_RCV;
+			else if(buf[res] == 0x7E)
+				state=FLAG_RCV;
+			else 
+				state=START;
+			break;
+		
+		case C_RCV:
+			if(buf[res] == 0x7E)
+				state=FLAG_RCV;
+			if((buf[res] == 0x03) ^ (buf[res]==0xFE))
+				state=BCC_RCV;
+			else
+				state=START;
+			break;
+		
+		case BCC_RCV:
+			if(buf[res] == 0x7E)
+				state=STOP_S;
+			else
+				state=START;
+						
+      
+		}
+      
       buf[res]=0;                   /* so we can printf... */
-      // printf("O buf res  e: %c",buf[res]);
-      printf(":%s:%d\n", buf, res);
+      printf(":%02hhX:%d\n", buf, res);
      
       if (buf[res]=='\0') STOP=TRUE;
     }
+
+	buf[1]= 0x01;
+	buf[2]= 0x07;
 
 
     printf("Trying to send message confirmation sent.\n");
