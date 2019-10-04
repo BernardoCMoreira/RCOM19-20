@@ -75,21 +75,25 @@ int main(int argc, char** argv)
     printf("New termios structure set\n");
 
 
-
-      gets(buf);
+      buf[0] = 0x7E;
+      buf[1] = 0x03;
+      buf[2] = 0x03;
+      buf[3] = buf[1]^buf[2];
+      buf[4] = 0x7E;
+      //gets(buf);
       res = write(fd,buf,strlen(buf));
       printf("%d bytes written\n", res);
 
-      while (STOP==FALSE) {
+      //while (STOP==FALSE) {
             /* loop for input */
 
         res = read(fd,buf,255);
                           /* returns after 5 chars have been input */
          buf[res]=0;               /* so we can printf... */
-         printf(":%s:%d\n", buf, res);
+         printf(":%02hhX:%d\n", buf, res);
 
-          if (buf[res]=='\0') STOP=TRUE;
-      }
+        //  if (buf[res]=='\0') STOP=TRUE;
+      //}
 
   /*
     O ciclo FOR e as instru��es seguintes devem ser alterados de modo a respeitar
