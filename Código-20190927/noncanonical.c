@@ -5,8 +5,11 @@
 #include <fcntl.h>
 #include <termios.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
 
-#define BAUDRATE B38400
+#define BAUDRATE B9600
 #define _POSIX_SOURCE 1 /* POSIX compliant source */
 #define FALSE 0
 #define TRUE 1
@@ -71,23 +74,29 @@ int main(int argc, char** argv)
     printf("New termios structure set\n");
 
 
-    while (STOP==FALSE) {   
-          /* loop for input */
-      res = read(fd,buf,255);
-      //gets(res);  /* returns after 5 chars have been input */
-      buf[res]=0;               /* so we can printf... */
+    while (STOP==FALSE) {       /* loop for input */
+
+      res = read(fd,buf,255);   /* returns after 5 chars have been input */
+      buf[res]=0;                   /* so we can printf... */
+      // printf("O buf res  e: %c",buf[res]);
       printf(":%s:%d\n", buf, res);
-
-      if (buf[0]=='\0') STOP=TRUE;
-
+     
+      if (buf[res]=='\0') STOP=TRUE;
     }
 
+
+    printf("Trying to send message confirmation sent.\n");
+    
+	write(fd,buf,strlen(buf));   
+	 
+    printf("Message confirmation sent.\n");
 
   /* 
     O ciclo WHILE deve ser alterado de modo a respeitar o indicado no guião 
   */
 
 
+    sleep(1);
     tcsetattr(fd,TCSANOW,&oldtio);
     close(fd);
     return 0;
