@@ -30,8 +30,8 @@ int main(int argc, char** argv)
     char buf[255];
     int state = 0;
 
-    if ( (argc < 2) || 
-  	     ((strcmp("/dev/ttyS0", argv[1])!=0) && 
+    if ( (argc < 2) ||
+  	     ((strcmp("/dev/ttyS0", argv[1])!=0) &&
   	      (strcmp("/dev/ttyS1", argv[1])!=0) )) {
       printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
       exit(1);
@@ -42,8 +42,8 @@ int main(int argc, char** argv)
     Open serial port device for reading and writing and not as controlling tty
     because we don't want to get killed if linenoise sends CTRL-C.
   */
-  
-    
+
+
     fd = open(argv[1], O_RDWR | O_NOCTTY );
     if (fd <0) {perror(argv[1]); exit(-1); }
 
@@ -65,9 +65,9 @@ int main(int argc, char** argv)
 
 
 
-  /* 
-    VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a 
-    leitura do(s) próximo(s) caracter(es)
+  /*
+    VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
+    leitura do(s) prï¿½ximo(s) caracter(es)
   */
 
 
@@ -85,18 +85,18 @@ int main(int argc, char** argv)
     while (STOP==FALSE) {       /* loop for input */
 
       res = read(fd,buf,255);   /* returns after 5 chars have been input */
-      
-      
+
+
       switch(state){
-		  
+
 		case START:
 			if(buf[res]==0x7E)
 				state=FLAG_RCV;
 			else
 				state=START;
-				
+
 			break;
-			
+
 		case FLAG_RCV:
 			if(buf[res] == 0x03)
 				state=A_RCV;
@@ -105,16 +105,16 @@ int main(int argc, char** argv)
 			else
 				state=START;
 			break;
-		
+
 		case A_RCV:
 			if(buf[res] == 0x03)
 				state = C_RCV;
 			else if(buf[res] == 0x7E)
 				state=FLAG_RCV;
-			else 
+			else
 				state=START;
 			break;
-		
+
 		case C_RCV:
 			if(buf[res] == 0x7E)
 				state=FLAG_RCV;
@@ -123,34 +123,36 @@ int main(int argc, char** argv)
 			else
 				state=START;
 			break;
-		
+
 		case BCC_RCV:
 			if(buf[res] == 0x7E)
 				state=STOP_S;
 			else
 				state=START;
-						
-      
+
+
 		}
-      
-      buf[res]=0;                   /* so we can printf... */
-      printf(":%02hhX:%d\n", buf, res);
-     
-      if (buf[res]=='\0') STOP=TRUE;
+
+
+    printf("State: %d", state);
+
+      if(state == STOP_S){              /* so we can printf... */
+        printf("%02hhX:%d\n", buf, res);
+        STOP = TRUE;
+      }
+
     }
 
-	buf[1]= 0x01;
-	buf[2]= 0x07;
 
 
     printf("Trying to send message confirmation sent.\n");
-    
-	write(fd,buf,strlen(buf));   
-	 
+
+	   write(fd,buf,strlen(buf));
+
     printf("Message confirmation sent.\n");
 
-  /* 
-    O ciclo WHILE deve ser alterado de modo a respeitar o indicado no guião 
+  /*
+    O ciclo WHILE deve ser alterado de modo a respeitar o indicado no guiï¿½o
   */
 
 
