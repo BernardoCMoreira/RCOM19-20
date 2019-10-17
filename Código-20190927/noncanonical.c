@@ -32,8 +32,8 @@ int main(int argc, char** argv)
 
     if ( (argc < 2) ||
   	     ((strcmp("/dev/ttyS0", argv[1])!=0) &&
-  	      (strcmp("/dev/ttyS1", argv[1])!=0)
-  	      (strcmp("/dev/ttyS2", argv[1])!=0))) {
+  	      (strcmp("/dev/ttyS1", argv[1])!=0) &&
+  	      (strcmp("/dev/ttyS2", argv[1])!=0) )) {
       printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
       exit(1);
     }
@@ -82,64 +82,97 @@ int main(int argc, char** argv)
 
     printf("New termios structure set\n");
 
-
+	int i=-1;
+	unsigned char frame[255];
     while (STOP==FALSE) {       /* loop for input */
 
       
-      printf("TEST1");
-      res = read(fd,buf,255);   /* returns after 5 chars have been input */
-      printf("TEST1");
+	
+      res = read(fd,buf,1);   /* returns after 5 chars have been input */
+	i++;
+	
+	frame[i]=buf[0];
+	
 
+
+	printf(" TEST: %x index: %d\n", buf[0], res);
 
 
       switch(state){
 
 		case START:
-			if(buf[res]==0x7E)
+			if(buf[0]==0x7E){
 				state=FLAG_RCV;
-			else
+				printf("from start to flag");
+			}
+			else{
 				state=START;
+				printf("from start to start");
+			}
 
 			break;
 
 		case FLAG_RCV:
-			if(buf[res] == 0x03)
+
+			if(buf[0] == 0x03){
 				state=A_RCV;
-			else if(buf[res] == 0x7E)
+				printf("from Flag to A");
+			}
+			else if(buf[0] == 0x7E){
 				state=FLAG_RCV;
-			else
+				printf("from flag to flag");
+			}
+			else{
 				state=START;
+				printf("from FLag to start");
+			}
 			break;
 
 		case A_RCV:
-			if(buf[res] == 0x03)
+			if(buf[0] == 0x03){
 				state = C_RCV;
-			else if(buf[res] == 0x7E)
+				printf("from A to C");
+			}
+			else if(buf[0] == 0x7E){
 				state=FLAG_RCV;
-			else
+				printf("from A to flag");
+			}
+			else{
 				state=START;
+				printf("from A to start");
+			}
 			break;
 
 		case C_RCV:
-			if(buf[res] == 0x7E)
+			if(buf[0] == 0x7E){
 				state=FLAG_RCV;
-			if((buf[res] == 0x03) ^ (buf[res]==0xFE))
+				printf("from C to flag");
+			}
+			if((buf[0] == (0x03^0x03))){
 				state=BCC_RCV;
-			else
+				printf("from C to BCC");
+			}
+			else{
 				state=START;
+				printf("from C to start");
+			}
 			break;
 
 		case BCC_RCV:
-			if(buf[res] == 0x7E)
+			if(buf[0] == 0x7E){
 				state=STOP_S;
-			else
+				printf("from BCC to STOP");
+			}
+			else{
 				state=START;
+				printf("from BCC to START");
+			}
 
 
 		}
 
 
-    printf("State: %d", state);
+	
 
       if(state == STOP_S){              /* so we can printf... */
         printf("%02hhX:%d\n", buf, res);
@@ -152,10 +185,9 @@ int main(int argc, char** argv)
 
     printf("Trying to send message confirmation sent.\n");
 
-	   write(fd,buf,strlen(buf));
+	write(fd,frame,5);
 
     printf("Message confirmation sent.\n");
-
   /*
     O ciclo WHILE deve ser alterado de modo a respeitar o indicado no gui�o
   */
