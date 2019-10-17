@@ -14,6 +14,12 @@
 #define _POSIX_SOURCE 1 /* POSIX compliant source */
 #define FALSE 0
 #define TRUE 1
+#define START 0
+#define FLAG_RCV 1
+#define A_RCV 2
+#define C_RCV 3
+#define BCC_RCV 4
+#define STOP_S 5
 
 volatile int STOP=FALSE;
 
@@ -22,12 +28,14 @@ int main(int argc, char** argv)
     int fd,c, res;
     struct termios oldtio,newtio;
     char buf[255];
+	int state=0;
     int i, sum = 0, speed = 0;
+
 
     if ( (argc < 2) ||
   	     ((strcmp("/dev/ttyS0", argv[1])!=0) &&
   	      (strcmp("/dev/ttyS1", argv[1])!=0) &&
-          (strcmp("/dev/ttyS2", argv[1])!=0) ))) {
+          	(strcmp("/dev/ttyS2", argv[1])!=0) )) {
       printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
       exit(1);
     }
@@ -81,20 +89,109 @@ int main(int argc, char** argv)
       buf[2] = 0x03;
       buf[3] = buf[1]^buf[2];
       buf[4] = 0x7E;
-      //gets(buf);
-      res = write(fd,buf,strlen(buf));
+      res = write(fd,buf,5);
       printf("%d bytes written\n", res);
 
-      //while (STOP==FALSE) {
-            /* loop for input */
+      printf(":%x\n", buf[3]);
 
-        res = read(fd,buf,255);
-                          /* returns after 5 chars have been input */
-         buf[res]=0;               /* so we can printf... */
-         printf(":%02hhX:%d\n", buf, res);
+	
+	char conf[255];
+   
+    while (STOP==FALSE) {       /* loop for input */
 
-        //  if (buf[res]=='\0') STOP=TRUE;
-      //}
+      
+	
+      res = read(fd,conf,1);   /* returns after 5 chars have been input */
+
+
+	
+
+
+	printf(" TEST: %x index: %d\n", conf[0], res);
+
+
+      switch(state){
+
+		case START:
+			if(conf[0]==0x7E){
+				state=FLAG_RCV;
+				printf("from start to flag");
+			}
+			else{
+				state=START;
+				printf("from start to start");
+			}
+
+			break;
+
+		case FLAG_RCV:
+
+			if(conf[0] == 0x03){
+				state=A_RCV;
+				printf("from Flag to A");
+			}
+			else if(conf[0] == 0x7E){
+				state=FLAG_RCV;
+				printf("from flag to flag");
+			}
+			else{
+				state=START;
+				printf("from FLag to start");
+			}
+			break;
+
+		case A_RCV:
+			if(conf[0] == 0x03){
+				state = C_RCV;
+				printf("from A to C");
+			}
+			else if(conf[0] == 0x7E){
+				state=FLAG_RCV;
+				printf("from A to flag");
+			}
+			else{
+				state=START;
+				printf("from A to start");
+			}
+			break;
+
+		case C_RCV:
+			if(conf[0] == 0x7E){
+				state=FLAG_RCV;
+				printf("from C to flag");
+			}
+			if((conf[0] == (0x03^0x03))){
+				state=BCC_RCV;
+				printf("from C to BCC");
+			}
+			else{
+				state=START;
+				printf("from C to start");
+			}
+			break;
+
+		case BCC_RCV:
+			if(conf[0] == 0x7E){
+				state=STOP_S;
+				printf("from BCC to STOP");
+			}
+			else{
+				state=START;
+				printf("from BCC to START");
+			}
+
+
+		}
+
+
+	
+
+      if(state == STOP_S && strcmp(conf,buf)){              /* so we can printf... */
+        printf("\nConfirmation message was obtained succesfully");
+        STOP = TRUE;
+      }
+
+    }
 
   /*
     O ciclo FOR e as instru��es seguintes devem ser alterados de modo a respeitar
@@ -111,4 +208,6 @@ int main(int argc, char** argv)
 
     close(fd);
     return 0;
+
 }
+
