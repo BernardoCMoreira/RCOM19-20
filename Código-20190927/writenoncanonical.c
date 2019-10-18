@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <signal.h>
 
 #define BAUDRATE B9600
 #define MODEMDEVICE "/dev/ttyS0"
@@ -23,12 +24,41 @@
 
 volatile int STOP=FALSE;
 
+int flag=1, conta=1;
+
+void send_set_message(int fd){
+
+	char buf[255];
+	buf[0] = 0x7E;
+
+        buf[1] = 0x03;
+
+        buf[2] = 0x03;
+
+        buf[3] = buf[1]^buf[2];
+
+        buf[4] = 0x7E;
+
+        int res = write(fd,buf,5);
+
+        printf("%d bytes written\n", res);
+}
+
+void alarm_handler()                  			 // atende alarme
+{
+	printf("alarme # %d\n", conta);
+	flag=1;
+	conta++;
+	
+}
+
+
 int main(int argc, char** argv)
 {
     int fd,c, res;
     struct termios oldtio,newtio;
-    char buf[255];
-	int state=0;
+    //char buf[255];
+    int state=0;
     int i, sum = 0, speed = 0;
 
 
@@ -83,35 +113,29 @@ int main(int argc, char** argv)
 
     printf("New termios structure set\n");
 
-
-      buf[0] = 0x7E;
-      buf[1] = 0x03;
-      buf[2] = 0x03;
-      buf[3] = buf[1]^buf[2];
-      buf[4] = 0x7E;
-      res = write(fd,buf,5);
-      printf("%d bytes written\n", res);
-
-      printf(":%x\n", buf[3]);
-
+    send_set_message(fd);
+    //Start timeout verification	
+    (void) signal(SIGALRM,  alarm_handler);    
 	
-	char conf[255];
+
+    char conf[255];
    
-    while (STOP==FALSE) {       /* loop for input */
-
-      
+    while (STOP==FALSE || conta<4) {       /* loop for input */
+	  if(flag){
+      		alarm(3);                 // activa alarme de 3s
+      		flag=0;
+		send_set_message(fd);
+   	}
 	
-      res = read(fd,conf,1);   /* returns after 5 chars have been input */
-
-
-	
-
+	printf("1\n");
+        res = read(fd,conf,1);   /* returns after 5 chars have been input */
+	printf("2\n");
 
 	printf(" TEST: %x index: %d\n", conf[0], res);
 
-
+      //verify UA message
       switch(state){
-
+	
 		case START:
 			if(conf[0]==0x7E){
 				state=FLAG_RCV;
@@ -141,7 +165,7 @@ int main(int argc, char** argv)
 			break;
 
 		case A_RCV:
-			if(conf[0] == 0x03){
+			if(conf[0] == 0x07){
 				state = C_RCV;
 				printf("from A to C");
 			}
@@ -160,7 +184,7 @@ int main(int argc, char** argv)
 				state=FLAG_RCV;
 				printf("from C to flag");
 			}
-			if((conf[0] == (0x03^0x03))){
+			if((conf[0] == (0x03^0x07))){
 				state=BCC_RCV;
 				printf("from C to BCC");
 			}
@@ -180,18 +204,16 @@ int main(int argc, char** argv)
 				printf("from BCC to START");
 			}
 
+		}	
 
-		}
-
-
-	
-
-      if(state == STOP_S && strcmp(conf,buf)){              /* so we can printf... */
-        printf("\nConfirmation message was obtained succesfully");
+      if(state == STOP_S){              /* so we can printf... */
+        printf("\nConfirmation message was obtained succesfully\n");
         STOP = TRUE;
-      }
+	alarm(0);
+	
+      }	
+  }
 
-    }
 
   /*
     O ciclo FOR e as instru��es seguintes devem ser alterados de modo a respeitar
