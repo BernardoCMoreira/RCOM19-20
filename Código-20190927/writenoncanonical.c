@@ -24,9 +24,9 @@
 
 volatile int STOP=FALSE;
 
-int flag=1, conta=1;
+int flag=1, conta=1, fd;
 
-void send_set_message(int fd){
+void send_set_message(){
 
 	char buf[255];
 	buf[0] = 0x7E;
@@ -49,13 +49,14 @@ void alarm_handler()                  			 // atende alarme
 	printf("alarme # %d\n", conta);
 	flag=1;
 	conta++;
+	send_set_message();
 	
 }
 
 
 int main(int argc, char** argv)
 {
-    int fd,c, res;
+    int c, res;
     struct termios oldtio,newtio;
     //char buf[255];
     int state=0;
@@ -92,8 +93,8 @@ int main(int argc, char** argv)
     /* set input mode (non-canonical, no echo,...) */
     newtio.c_lflag = 0;
 
-    newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
-    newtio.c_cc[VMIN]     = 1;   /* blocking read until 5 chars received */
+    newtio.c_cc[VTIME]    = 0.1;   /* inter-character timer unused */
+    newtio.c_cc[VMIN]     = 0;   /* blocking read until 5 chars received */
 
 
 
@@ -113,25 +114,22 @@ int main(int argc, char** argv)
 
     printf("New termios structure set\n");
 
-    send_set_message(fd);
+    send_set_message();
     //Start timeout verification	
     (void) signal(SIGALRM,  alarm_handler);    
 	
 
     char conf[255];
    
-    while (STOP==FALSE || conta<4) {       /* loop for input */
+    while (STOP==FALSE && conta<4) {       /* loop for input */
 	  if(flag){
       		alarm(3);                 // activa alarme de 3s
       		flag=0;
-		send_set_message(fd);
    	}
 	
-	printf("1\n");
         res = read(fd,conf,1);   /* returns after 5 chars have been input */
-	printf("2\n");
 
-	printf(" TEST: %x index: %d\n", conf[0], res);
+	//printf(" TEST: %x index: %d\n", conf[0], res);
 
       //verify UA message
       switch(state){
@@ -143,7 +141,7 @@ int main(int argc, char** argv)
 			}
 			else{
 				state=START;
-				printf("from start to start");
+				//printf("from start to start");
 			}
 
 			break;
@@ -211,10 +209,13 @@ int main(int argc, char** argv)
         STOP = TRUE;
 	alarm(0);
 	
-      }	
+      }
+   
   }
 
-
+	if(conta>=4){
+		printf("ERROR: already resent message 3 times\n");
+	}
   /*
     O ciclo FOR e as instru��es seguintes devem ser alterados de modo a respeitar
     o indicado no gui�o
