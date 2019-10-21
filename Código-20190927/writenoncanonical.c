@@ -25,6 +25,7 @@
 volatile int STOP=FALSE;
 
 int flag=1, conta=1, fd;
+   int state=0;
 
 void send_set_message(){
 
@@ -44,6 +45,75 @@ void send_set_message(){
         printf("%d bytes written\n", res);
 }
 
+void ua_state_machine(char conf[]){
+ 	switch(state){
+	
+		case START:
+			if(conf[0]==0x7E){
+				state=FLAG_RCV;
+			}
+			else{
+				state=START;
+			}
+
+			break;
+
+		case FLAG_RCV:
+
+			if(conf[0] == 0x03){
+				state=A_RCV;
+			}
+			else if(conf[0] == 0x7E){
+				state=FLAG_RCV;
+			}
+			else{
+				state=START;
+			}
+			break;
+
+		case A_RCV:
+			if(conf[0] == 0x07){
+				state = C_RCV;
+			}
+			else if(conf[0] == 0x7E){
+				state=FLAG_RCV;
+			}
+			else{
+				state=START;
+			}
+			break;
+
+		case C_RCV:
+			if(conf[0] == 0x7E){
+				state=FLAG_RCV;
+			}
+			if((conf[0] == (0x03^0x07))){
+				state=BCC_RCV;
+			}
+			else{
+				state=START;
+			}
+			break;
+
+		case BCC_RCV:
+			if(conf[0] == 0x7E){
+				state=STOP_S;
+			}
+			else{
+				state=START;
+			}
+
+		}	
+
+      if(state == STOP_S){              /* so we can printf... */
+        printf("\nConfirmation message was obtained succesfully\n");
+        STOP = TRUE;
+	alarm(0);
+	
+      }
+   
+
+}
 void alarm_handler()                  			 // atende alarme
 {
 	printf("alarme # %d\n", conta);
@@ -59,7 +129,6 @@ int main(int argc, char** argv)
     int c, res;
     struct termios oldtio,newtio;
     //char buf[255];
-    int state=0;
     int i, sum = 0, speed = 0;
 
 
@@ -129,93 +198,15 @@ int main(int argc, char** argv)
 	
         res = read(fd,conf,1);   /* returns after 5 chars have been input */
 
-	//printf(" TEST: %x index: %d\n", conf[0], res);
 
       //verify UA message
-      switch(state){
-	
-		case START:
-			if(conf[0]==0x7E){
-				state=FLAG_RCV;
-				printf("from start to flag");
-			}
-			else{
-				state=START;
-				//printf("from start to start");
-			}
-
-			break;
-
-		case FLAG_RCV:
-
-			if(conf[0] == 0x03){
-				state=A_RCV;
-				printf("from Flag to A");
-			}
-			else if(conf[0] == 0x7E){
-				state=FLAG_RCV;
-				printf("from flag to flag");
-			}
-			else{
-				state=START;
-				printf("from FLag to start");
-			}
-			break;
-
-		case A_RCV:
-			if(conf[0] == 0x07){
-				state = C_RCV;
-				printf("from A to C");
-			}
-			else if(conf[0] == 0x7E){
-				state=FLAG_RCV;
-				printf("from A to flag");
-			}
-			else{
-				state=START;
-				printf("from A to start");
-			}
-			break;
-
-		case C_RCV:
-			if(conf[0] == 0x7E){
-				state=FLAG_RCV;
-				printf("from C to flag");
-			}
-			if((conf[0] == (0x03^0x07))){
-				state=BCC_RCV;
-				printf("from C to BCC");
-			}
-			else{
-				state=START;
-				printf("from C to start");
-			}
-			break;
-
-		case BCC_RCV:
-			if(conf[0] == 0x7E){
-				state=STOP_S;
-				printf("from BCC to STOP");
-			}
-			else{
-				state=START;
-				printf("from BCC to START");
-			}
-
-		}	
-
-      if(state == STOP_S){              /* so we can printf... */
-        printf("\nConfirmation message was obtained succesfully\n");
-        STOP = TRUE;
-	alarm(0);
-	
-      }
-   
-  }
+     
+	ua_state_machine(conf);
 
 	if(conta>=4){
 		printf("ERROR: already resent message 3 times\n");
 	}
+}
   /*
     O ciclo FOR e as instru��es seguintes devem ser alterados de modo a respeitar
     o indicado no gui�o
@@ -227,10 +218,7 @@ int main(int argc, char** argv)
       exit(-1);
     }
 
-
-
     close(fd);
     return 0;
-
 }
 
