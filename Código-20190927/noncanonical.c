@@ -22,28 +22,34 @@
 
 
 volatile int STOP=FALSE;
-int fd;
-int state = 0;
+int state =0;
 
-void send_ua_message(){
-	char buff[255];
-	buff[0]= 0x7E;
-	buff[1]= 0x03;
-	buff[2]= 0x07;
-	//buff[3]= buff[1]^buff[2];
-	buff[3] = (0x03 ^ 0x07);
-	buff[4]= 0x7E;
+void Send_UA_Message(int fd){
+
+    printf("Trying to send message confirmation.\n");
+
+	char buf[255];
+	buf[0] = 0x7E;
+	buf[1] = 0x03;
+	buf[2] = 0x07;
+	buf[3] = buf[1]^buf[2];
+	buf[4] = 0x7E;
 	
-	int res = write(fd,buff,5);
-	printf("%d bytes written \n", res);
+	write(fd,buf,5);
+
+	
+    printf("Message confirmation sent.\n");
+
 }
 
-void set_state_machine(char buf[], int res){
- switch(state){
+int updateStateMachine(char byte_received){
+
+	 switch(state){
+
 		case START:
-			if(buf[0]==0x7E){
+			if(byte_received ==0x7E){
 				state=FLAG_RCV;
-				printf("from start to flag");
+				printf("from start to flag: %d", state);
 			}
 			else{
 				state=START;
@@ -54,11 +60,11 @@ void set_state_machine(char buf[], int res){
 
 		case FLAG_RCV:
 
-			if(buf[0] == 0x03){
+			if(byte_received== 0x03){
 				state=A_RCV;
 				printf("from Flag to A");
 			}
-			else if(buf[0] == 0x7E){
+			else if(byte_received == 0x7E){
 				state=FLAG_RCV;
 				printf("from flag to flag");
 			}
@@ -69,11 +75,11 @@ void set_state_machine(char buf[], int res){
 			break;
 
 		case A_RCV:
-			if(buf[0] == 0x03){
+			if(byte_received == 0x03){
 				state = C_RCV;
 				printf("from A to C");
 			}
-			else if(buf[0] == 0x7E){
+			else if(byte_received == 0x7E){
 				state=FLAG_RCV;
 				printf("from A to flag");
 			}
@@ -84,11 +90,11 @@ void set_state_machine(char buf[], int res){
 			break;
 
 		case C_RCV:
-			if(buf[0] == 0x7E){
+			if(byte_received == 0x7E){
 				state=FLAG_RCV;
 				printf("from C to flag");
 			}
-			if((buf[0] == (0x03^0x03))){
+			if((byte_received == (0x03^0x03))){
 				state=BCC_RCV;
 				printf("from C to BCC");
 			}
@@ -99,7 +105,7 @@ void set_state_machine(char buf[], int res){
 			break;
 
 		case BCC_RCV:
-			if(buf[0] == 0x7E){
+			if(byte_received== 0x7E){
 				state=STOP_S;
 				printf("from BCC to STOP");
 			}
@@ -107,22 +113,19 @@ void set_state_machine(char buf[], int res){
 				state=START;
 				printf("from BCC to START");
 			}
-		}	
+	 }
+	 
+	return state;
 
-      if(state == STOP_S){              /* so we can printf... */
-        printf("%02hhX:%d\n", buf, res);
-        STOP = TRUE;
-	send_ua_message();
-      }
 
-    
 }
+
+
 int main(int argc, char** argv)
 {
-    int c, res;
+    int fd,c, res;
     struct termios oldtio,newtio;
     char buf[255];
-  
 
     if ( (argc < 2) ||
   	     ((strcmp("/dev/ttyS0", argv[1])!=0) &&
@@ -132,14 +135,8 @@ int main(int argc, char** argv)
       exit(1);
     }
 
-
-  /*
-    Open serial port device for reading and writing and not as controlling tty
-    because we don't want to get killed if linenoise sends CTRL-C.
-  */
-
-
     fd = open(argv[1], O_RDWR | O_NOCTTY );
+
     if (fd <0) {perror(argv[1]); exit(-1); }
 
     if ( tcgetattr(fd,&oldtio) == -1) { /* save current port settings */
@@ -158,15 +155,6 @@ int main(int argc, char** argv)
     newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
     newtio.c_cc[VMIN]     = 1;   /* blocking read until 5 chars received */
 
-
-
-  /*
-    VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
-    leitura do(s) pr�ximo(s) caracter(es)
-  */
-
-
-
     tcflush(fd, TCIOFLUSH);
 
     if ( tcsetattr(fd,TCSANOW,&newtio) == -1) {
@@ -176,33 +164,30 @@ int main(int argc, char** argv)
 
     printf("New termios structure set\n");
 
-	int i=-1;
-	unsigned char frame[255];
-    while (STOP==FALSE) {       /* loop for input */
 
-      
+    while (STOP==FALSE) {    
 	
-      res = read(fd,buf,1);   /* returns after 5 chars have been input */
-      i++;
-	
-	frame[i]=buf[0];
-	
-      printf(" TEST: %x index: %d\n", buf[0], res);
-	
-	set_state_machine(buf, res);
-     }
-      printf("Trying to send message confirmation sent.\n");
-	
-     //write(fd,frame,5);
+		res = read(fd,buf,1);   /* returns after 5 chars have been input */
+		
+		printf(" TEST: %x index: %d\n", buf[0], res);
 
-    printf("Message confirmation sent.\n");
-  /*
-    O ciclo WHILE deve ser alterado de modo a respeitar o indicado no gui�o
-  */
+		state = updateStateMachine(buf[0]);	
 
+		printf("\nSTATE: %d\n",state);
+
+		if(state == STOP_S){           
+			printf("%02hhX:%d\n", buf, res);
+			STOP = TRUE;
+		}
+
+    }
+
+	Send_UA_Message(fd);
 
     sleep(1);
     tcsetattr(fd,TCSANOW,&oldtio);
     close(fd);
     return 0;
+	
 }
+
