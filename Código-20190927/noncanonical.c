@@ -22,84 +22,24 @@
 
 
 volatile int STOP=FALSE;
+int fd;
+int state = 0;
 
-int main(int argc, char** argv)
-{
-    int fd,c, res;
-    struct termios oldtio,newtio;
-    char buf[255];
-    int state = 0;
-
-    if ( (argc < 2) ||
-  	     ((strcmp("/dev/ttyS0", argv[1])!=0) &&
-  	      (strcmp("/dev/ttyS1", argv[1])!=0) &&
-  	      (strcmp("/dev/ttyS2", argv[1])!=0) )) {
-      printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
-      exit(1);
-    }
-
-
-  /*
-    Open serial port device for reading and writing and not as controlling tty
-    because we don't want to get killed if linenoise sends CTRL-C.
-  */
-
-
-    fd = open(argv[1], O_RDWR | O_NOCTTY );
-    if (fd <0) {perror(argv[1]); exit(-1); }
-
-    if ( tcgetattr(fd,&oldtio) == -1) { /* save current port settings */
-      perror("tcgetattr");
-      exit(-1);
-    }
-
-    bzero(&newtio, sizeof(newtio));
-    newtio.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
-    newtio.c_iflag = IGNPAR;
-    newtio.c_oflag = 0;
-
-    /* set input mode (non-canonical, no echo,...) */
-    newtio.c_lflag = 0;
-
-    newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
-    newtio.c_cc[VMIN]     = 1;   /* blocking read until 5 chars received */
-
-
-
-  /*
-    VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
-    leitura do(s) pr�ximo(s) caracter(es)
-  */
-
-
-
-    tcflush(fd, TCIOFLUSH);
-
-    if ( tcsetattr(fd,TCSANOW,&newtio) == -1) {
-      perror("tcsetattr");
-      exit(-1);
-    }
-
-    printf("New termios structure set\n");
-
-	int i=-1;
-	unsigned char frame[255];
-    while (STOP==FALSE) {       /* loop for input */
-
-      
+void send_ua_message(){
+	char buff[255];
+	buff[0]= 0x7E;
+	buff[1]= 0x03;
+	buff[2]= 0x07;
+	//buff[3]= buff[1]^buff[2];
+	buff[3] = (0x03 ^ 0x07);
+	buff[4]= 0x7E;
 	
-      res = read(fd,buf,1);   /* returns after 5 chars have been input */
-	i++;
-	
-	frame[i]=buf[0];
-	
+	int res = write(fd,buff,5);
+	printf("%d bytes written \n", res);
+}
 
-
-	printf(" TEST: %x index: %d\n", buf[0], res);
-
-
-      switch(state){
-
+void set_state_machine(char buf[], int res){
+ switch(state){
 		case START:
 			if(buf[0]==0x7E){
 				state=FLAG_RCV;
@@ -167,25 +107,93 @@ int main(int argc, char** argv)
 				state=START;
 				printf("from BCC to START");
 			}
-
-
-		}
-
-
-	
+		}	
 
       if(state == STOP_S){              /* so we can printf... */
         printf("%02hhX:%d\n", buf, res);
         STOP = TRUE;
+	send_ua_message();
       }
 
+    
+}
+int main(int argc, char** argv)
+{
+    int c, res;
+    struct termios oldtio,newtio;
+    char buf[255];
+  
+
+    if ( (argc < 2) ||
+  	     ((strcmp("/dev/ttyS0", argv[1])!=0) &&
+  	      (strcmp("/dev/ttyS1", argv[1])!=0) &&
+  	      (strcmp("/dev/ttyS2", argv[1])!=0) )) {
+      printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
+      exit(1);
     }
 
 
+  /*
+    Open serial port device for reading and writing and not as controlling tty
+    because we don't want to get killed if linenoise sends CTRL-C.
+  */
 
-    printf("Trying to send message confirmation sent.\n");
 
-	write(fd,frame,5);
+    fd = open(argv[1], O_RDWR | O_NOCTTY );
+    if (fd <0) {perror(argv[1]); exit(-1); }
+
+    if ( tcgetattr(fd,&oldtio) == -1) { /* save current port settings */
+      perror("tcgetattr");
+      exit(-1);
+    }
+
+    bzero(&newtio, sizeof(newtio));
+    newtio.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
+    newtio.c_iflag = IGNPAR;
+    newtio.c_oflag = 0;
+
+    /* set input mode (non-canonical, no echo,...) */
+    newtio.c_lflag = 0;
+
+    newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
+    newtio.c_cc[VMIN]     = 1;   /* blocking read until 5 chars received */
+
+
+
+  /*
+    VTIME e VMIN devem ser alterados de forma a proteger com um temporizador a
+    leitura do(s) pr�ximo(s) caracter(es)
+  */
+
+
+
+    tcflush(fd, TCIOFLUSH);
+
+    if ( tcsetattr(fd,TCSANOW,&newtio) == -1) {
+      perror("tcsetattr");
+      exit(-1);
+    }
+
+    printf("New termios structure set\n");
+
+	int i=-1;
+	unsigned char frame[255];
+    while (STOP==FALSE) {       /* loop for input */
+
+      
+	
+      res = read(fd,buf,1);   /* returns after 5 chars have been input */
+      i++;
+	
+	frame[i]=buf[0];
+	
+      printf(" TEST: %x index: %d\n", buf[0], res);
+	
+	set_state_machine(buf, res);
+     }
+      printf("Trying to send message confirmation sent.\n");
+	
+     //write(fd,frame,5);
 
     printf("Message confirmation sent.\n");
   /*
