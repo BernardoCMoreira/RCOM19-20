@@ -137,6 +137,46 @@ int set_save_port_settings(int fd, struct termios *oldtio)
     return 0;
 }
 
+
+char calculateBcc2(char *buffer, int length)
+{
+  char bcc2 = buffer[0];
+  
+  for (int i = 1; i < size; i++)
+  {
+    bcc2 ^= buffer[i];
+  }
+
+  return bcc2;
+}
+
+
+int llwrite(int fd, char * buffer, int length){
+
+	
+ 	char buf[255];
+	
+	char bcc2 = calculateBcc2(buffer, length);
+
+    buf[0] = 0x7E;
+	
+    buf[1] = 0x03;
+
+    buf[2] = 0x03;
+
+    buf[3] = buf[1] ^ buf[2];
+
+    
+
+
+
+
+
+
+
+}
+
+
 int set_state_machine(char byte_received)
 {
 
@@ -147,12 +187,10 @@ int set_state_machine(char byte_received)
         if (byte_received == 0x7E)
         {
             state = FLAG_RCV;
-            printf("from start to flag: %d", state);
         }
         else
         {
             state = START;
-            printf("from start to start");
         }
 
         break;
@@ -162,17 +200,14 @@ int set_state_machine(char byte_received)
         if (byte_received == 0x03)
         {
             state = A_RCV;
-            printf("from Flag to A");
         }
         else if (byte_received == 0x7E)
         {
             state = FLAG_RCV;
-            printf("from flag to flag");
         }
         else
         {
             state = START;
-            printf("from FLag to start");
         }
         break;
 
@@ -180,17 +215,14 @@ int set_state_machine(char byte_received)
         if (byte_received == 0x03)
         {
             state = C_RCV;
-            printf("from A to C");
         }
         else if (byte_received == 0x7E)
         {
             state = FLAG_RCV;
-            printf("from A to flag");
         }
         else
         {
             state = START;
-            printf("from A to start");
         }
         break;
 
@@ -198,17 +230,14 @@ int set_state_machine(char byte_received)
         if (byte_received == 0x7E)
         {
             state = FLAG_RCV;
-            printf("from C to flag");
         }
         if (byte_received == (0x03 ^ 0x03))
         {
             state = BCC_RCV;
-            printf("from C to BCC");
         }
         else
         {
             state = START;
-            printf("from C to start");
         }
         break;
 
@@ -216,12 +245,10 @@ int set_state_machine(char byte_received)
         if (byte_received == 0x7E)
         {
             state = STOP_S;
-            printf("from BCC to STOP");
         }
         else
         {
             state = START;
-            printf("from BCC to START");
         }
     }
 
