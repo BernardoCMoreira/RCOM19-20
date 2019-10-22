@@ -170,7 +170,7 @@ int llwrite(int fd, char * buffer, int length){
      int current_index = 4;
   for (int i = 0; i < length; i++)
   {
-    if (buffer[i] == FLAG)
+    if (buffer[i] == FLAG || buffer[i] == ESC)
     {
 	buf = (unsigned char *)realloc(buf, ++res);
 
@@ -178,30 +178,31 @@ int llwrite(int fd, char * buffer, int length){
       buf[current_index+1] = buffer[i] ^ ESC_OR;
       current_index += 2;
     }
-    else
-    {
-      if (buffer[i] == ESC)
-      {
-	buf = (unsigned char *)realloc(buf, ++res);
-        buf[current_index] = ESC;
-        buf[current_index + 1] = buffer[i] ^ ESC_OR;
-        current_index+= 2;
-      }
-      else
-      {
-        buf[current_index] = buffer[i];
-        current_index++;
-      }
+    else{
+	buf[current_index] = buffer[i];
+	current_index++;
     }
   }
 
 
+	if(bcc2 = FLAG || bcc2 == ESC)
+		buf[current_index] = ESC;
+		buf[current_index + 1] = bcc2 ^ ESC_OR;
+      		current_index += 2;
+	}
+
+	buf[current_index] = FLAG;
+
+	
 
 
 
 
 
 }
+
+
+
 
 
 int set_state_machine(char byte_received)
