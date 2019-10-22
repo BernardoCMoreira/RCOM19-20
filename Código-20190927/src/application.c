@@ -154,7 +154,8 @@ char calculateBcc2(char *buffer, int length)
 int llwrite(int fd, char * buffer, int length){
 
 	
- 	char buf[255];
+ 	unsigned char *buf = (unsigned char *)malloc((length + 6) * sizeof(unsigned char));
+	int res = length + 6;
 	
 	char bcc2 = calculateBcc2(buffer, length);
 
@@ -166,7 +167,33 @@ int llwrite(int fd, char * buffer, int length){
 
     buf[3] = buf[1] ^ buf[2];
 
-    
+     int current_index = 4;
+  for (int i = 0; i < length; i++)
+  {
+    if (buffer[i] == FLAG)
+    {
+	buf = (unsigned char *)realloc(buf, ++res);
+
+      buf[current_index] = ESC;
+      buf[current_index+1] = buffer[i] ^ ESC_OR;
+      current_index += 2;
+    }
+    else
+    {
+      if (buffer[i] == ESC)
+      {
+	buf = (unsigned char *)realloc(buf, ++res);
+        buf[current_index] = ESC;
+        buf[current_index + 1] = buffer[i] ^ ESC_OR;
+        current_index+= 2;
+      }
+      else
+      {
+        buf[current_index] = buffer[i];
+        current_index++;
+      }
+    }
+  }
 
 
 

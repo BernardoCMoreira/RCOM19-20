@@ -29,6 +29,10 @@
 #define BCC_RCV 4
 #define STOP_S 5
 
+#define FLAG 0x7E
+#define ESC 0x7D
+#define ESC_OR 0x20
+
 void alarm_handler();
 int llopen(char *porta, int flag);
 int set_save_port_settings(int fd, struct termios *oldtio);
