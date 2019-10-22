@@ -186,6 +186,8 @@ int llwrite(int fd, char * buffer, int length){
 
 
 	if(bcc2 = FLAG || bcc2 == ESC)
+
+		buf = (unsigned char *)realloc(buf, ++res);
 		buf[current_index] = ESC;
 		buf[current_index + 1] = bcc2 ^ ESC_OR;
       		current_index += 2;
