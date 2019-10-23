@@ -14,6 +14,8 @@ volatile int STOP = FALSE;
 int flag = 1, conta = 1, fd;
 int state = 0;
 
+int lastS=0;
+
 void alarm_handler() // atende alarme
 {
     printf("alarme # %d\n", conta);
@@ -163,19 +165,34 @@ int llwrite(int fd, char * buffer, int length){
 	
     buf[1] = 0x03;
 
-    buf[2] = 0x03;
+	if(lastS ==0){
+    		buf[2] = 0x00;
+		lastS=1; 
+	}
+	else{
+		buf[2] = 0x40; 
+		lastS=0;
+	}
 
     buf[3] = buf[1] ^ buf[2];
 
      int current_index = 4;
   for (int i = 0; i < length; i++)
   {
-    if (buffer[i] == FLAG || buffer[i] == ESC)
+    if (buffer[i] == FLAG)
     {
 	buf = (unsigned char *)realloc(buf, ++res);
 
       buf[current_index] = ESC;
-      buf[current_index+1] = buffer[i] ^ ESC_OR;
+      buf[current_index+1] = 0x5d;
+      current_index += 2;
+    }
+    if (buffer[i] == ESC)
+    {
+	buf = (unsigned char *)realloc(buf, ++res);
+
+      buf[current_index] = ESC;
+      buf[current_index+1] = 0x5e;
       current_index += 2;
     }
     else{
@@ -185,15 +202,62 @@ int llwrite(int fd, char * buffer, int length){
   }
 
 
-	if(bcc2 == FLAG || bcc2 == ESC){
+	if(bcc2 == FLAG){
 
 		buf = (unsigned char *)realloc(buf, ++res);
 		buf[current_index] = ESC;
-		buf[current_index + 1] = bcc2 ^ ESC_OR;
+		buf[current_index + 1] = 0x5d;
+      		current_index += 2;
+	}
+
+	if(bcc2 == ESC){
+
+		buf = (unsigned char *)realloc(buf, ++res);
+		buf[current_index] = ESC;
+		buf[current_index + 1] = 0x5e;
       		current_index += 2;
 	}
 
 	buf[current_index] = FLAG;
+
+	
+	write(fd, buf, res);
+        (void)signal(SIGALRM, alarm_handler);
+
+        char conf[255];
+        while (STOP == FALSE && conta < 4)
+        {
+            if (flag)
+            {
+                alarm(3);
+                flag = 0;
+            }
+            res = read(fd, conf, 1);
+
+            ua_state_machine(conf);
+            if (conta >= 4)
+            {
+                printf("ERROR: already resent message 3 times\n");
+            }
+        }
+        sleep(1);
+	
+
+
+
+}
+
+int llread(int fd, char * buffer){
+
+	unsigned char buf;
+	int res=0;
+
+	while(state != BCC_RCV){
+	
+		read(fd, buf, 1);
+		state = info_state_machine(buf);
+
+	}
 
 	
 	
@@ -203,9 +267,121 @@ int llwrite(int fd, char * buffer, int length){
 
 }
 
+int info_state_machine(char byte_received, char* buffer, int* res)){
+
+unsigned char controlByte;
+int controlS;
+
+switch (state)
+    {
+
+    case START:
+        if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        else
+        {
+            state = START; 
+        }
+        break;
+	
+    case FLAG_RCV:
+        if (byte_received == 0x03)
+        {
+            state = A_RCV;
+        }
+        else if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV; 
+        }
+	else
+	{
+	    state = START;
+	}
+        break;
+    
+    case A_RCV:
+        if (byte_received == 0x00)
+        {
+            //quando recebe o control com s = 0
+	    controlByte = byte_received;
+	    controlS = 0;
+        }
+        else if (byte_received == 0x40)
+        {
+            //quando recebe o control com s = 1 
+	    controlByte = byte_received;
+	    controlS = 1;
+        }
+	else if (byte_received= 0x7E)
+	{
+	    state = FLAG_RCV;
+	}
+	else
+	{
+	    state = START;
+	}
+        break;
+
+    case C_RCV:
+        if (byte_received == A ^ controlByte)
+        {
+            state = BCC_RCV;
+        }
+	else
+	{
+	    state = START;
+	}
+        break;
+
+    case BCC_RCV:
+        if (byte_received == A ^ controlB)
+        {
+            state = BCC_RCV;
+        }
+	else
+	{
+	    state = START;
+	}
+        break;
+
+    case ESC_S: 
+	if(byte_received == 0x5e){
+		buffer = (char*)realloc(buffer, ++(*res));
+		buffer[*res-1] = 0x7E;
+	}
+	
+	else if(byte_received == 0x5e){
+		buffer = (char*)realloc(buffer, ++(*res));
+		buffer[*res-1] = 0x7E;
+	}
+	else{
+
+		printf("Found invalid character after the escape character");
+	}
+	state = DATA_S;
+	break;
+    
+    case DATA_S:
+	if (byte_received == ESC){
+	    state = ESC_S;
+	}
+
+	if (byte_received == FLAG){
+	    state = STOP_S;
+	}
+
+	else{
+            buffer = (char *)realloc(buffer, ++(*res));
+            buffer[*res - 1] = byte_received;
+	}
+	break;
 
 
-
+    return state;  	
+		 
+}
 
 int set_state_machine(char byte_received)
 {

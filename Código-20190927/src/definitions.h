@@ -29,6 +29,8 @@
 #define C_RCV 3
 #define BCC_RCV 4
 #define STOP_S 5
+#define ESC_S 6
+#define DATA_S 7
 
 #define FLAG 0x7E
 #define ESC 0x7D
