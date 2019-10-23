@@ -13,15 +13,15 @@ volatile int STOP = FALSE;
 
 int flag = 1, conta = 1, fd;
 int state = 0;
-
 int lastS=0;
+int writerVar=0, readerVar=0;
 
 void alarm_handler() // atende alarme
 {
     printf("alarme # %d\n", conta);
     flag = 1;
     conta++;
-    send_set_message();
+    //send_set_message();                 
 }
 
 int llopen(char *porta, int flagE_R)
@@ -126,7 +126,7 @@ int set_save_port_settings(int fd, struct termios *oldtio)
     /* set input mode (non-canonical, no echo,...) */
     newtio.c_lflag = 0;
 
-    newtio.c_cc[VTIME] = 0.1; /* inter-character timer unused */
+    newtio.c_cc[VTIME] = 0; /* inter-character timer unused */
     newtio.c_cc[VMIN] = 0;
 
     tcflush(fd, TCIOFLUSH);
@@ -241,9 +241,7 @@ int llwrite(int fd, char * buffer, int length){
             }
         }
         sleep(1);
-	
-
-
+	return 0;
 
 }
 
@@ -253,26 +251,25 @@ int llread(int fd, char * buffer){
 	int res=0;
 
 	while(state != BCC_RCV){
-	
+	   
 		read(fd, buf, 1);
-		state = info_state_machine(buf);
+
+        //WHAT VALUES SHOULD WE PUT HERE?
+        
+		//state = info_state_machine(buf);
 
 	}
 
 	
-	
-	
-
-
-
+    return 0;
 }
 
-int info_state_machine(char byte_received, char* buffer, int* res)){
+int info_state_machine(char byte_received, char* buffer, int* res)
+{
 
-unsigned char controlByte;
-int controlS;
-
-switch (state)
+    unsigned char controlByte;
+    int controlS;
+    switch (state)
     {
 
     case START:
@@ -314,7 +311,7 @@ switch (state)
 	    controlByte = byte_received;
 	    controlS = 1;
         }
-	else if (byte_received= 0x7E)
+	else if (byte_received==0x7E)
 	{
 	    state = FLAG_RCV;
 	}
@@ -325,7 +322,7 @@ switch (state)
         break;
 
     case C_RCV:
-        if (byte_received == A ^ controlByte)
+        if (byte_received == (A_RCV ^ controlByte))
         {
             state = BCC_RCV;
         }
@@ -336,7 +333,7 @@ switch (state)
         break;
 
     case BCC_RCV:
-        if (byte_received == A ^ controlB)
+        if (byte_received == (A_RCV ^ controlByte))
         {
             state = BCC_RCV;
         }
@@ -378,7 +375,7 @@ switch (state)
 	}
 	break;
 
-
+}
     return state;  	
 		 
 }
@@ -577,4 +574,187 @@ void Send_UA_Message(int fd)
     write(fd, buf, 5);
 
     printf("Message confirmation sent.\n");
+}
+
+int llclose(int fd){
+    char conf[255];
+    int res;
+    //if sender:: send DISC, read DISC, SEND UA!
+    if (writerVar == TRUE){
+        send_disc_message();
+        printf("DISC message sent!\n");
+        while (STOP == FALSE && conta < 4)
+        {
+            if (flag)
+            {
+                alarm(3); // activa alarme de 3s
+                flag = 0;
+            }
+            //verify UA message
+            res = read(fd, conf, 1);
+            disc_state_machine(conf[0]);
+            if (conta >= 4)
+            {
+                printf("ERROR: already resent message 3 times\n");
+                return -1;
+            }
+        }
+        sleep(1);
+
+            printf("DISC message received!\n");
+            Send_UA_Message(fd);
+            printf("UA message sent!\n");
+        }
+        else{
+
+            //read disc
+             res = read(fd, conf, 1);
+
+            while (STOP == FALSE && conta < 4)
+            {
+                if (flag)
+                {
+                 alarm(3); // activa alarme de 3s
+                 flag = 0;
+                }
+             res = read(fd, conf, 1);
+            disc_state_machine(conf[0]);
+            if (conta >= 4)
+             {
+                 printf("ERROR: already resent message 3 times\n");
+                 return -1;
+                }   
+            }
+
+            //send disc
+      
+
+                printf("DISC message received!");
+                send_disc_message();
+                printf("DISC message sent!");
+            //read ua!
+             res = read(fd, conf, 1);
+
+            while (STOP == FALSE && conta < 4)
+            {
+                if (flag)
+                {
+                 alarm(3); // activa alarme de 3s
+                 flag = 0;
+                }
+            res = read(fd, conf, 1);
+            ua_state_machine(conf);
+            if (conta >= 4)
+             {
+                 printf("ERROR: already resent message 3 times\n");
+                 return -1;
+                }   
+            }
+
+            printf("UA message sent!");
+
+         }
+   
+
+ if (close(fd)<0) 
+        return -1;
+    return 0;
+}
+
+void send_disc_message(void){
+
+    char buf[255];
+    buf[0] = 0x7E;
+
+    buf[1] = 0x03;
+
+    buf[2] = 0x0B;              
+
+    buf[3] = buf[1] ^ buf[2];
+
+    buf[4] = 0x7E;
+
+    int res = write(fd, buf, 5);
+
+}
+
+int disc_state_machine(char byte_received){
+     switch (state) {
+
+    case START:
+        if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+
+        break;
+
+    case FLAG_RCV:
+
+        if (byte_received == 0x03)
+        {
+            state = A_RCV;
+        }
+        else if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+        break;
+
+    case A_RCV:
+        if (byte_received == 0x0B)
+        {
+            state = C_RCV;
+        }
+        else if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+        break;
+
+    case C_RCV:
+        if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        if (byte_received == (0x03 ^ 0x0B))
+        {
+            state = BCC_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+        break;
+
+    case BCC_RCV:
+        if (byte_received == 0x7E)
+        {
+            state = STOP_S;
+        }
+        else
+        {
+            state = START;
+        }
+    }
+      if (state == STOP_S)
+    { /* so we can printf... */
+        printf("\nConfirmation message was obtained succesfully\n");
+        STOP = TRUE;
+        alarm(0);
+    }
+
+    return state;
 }

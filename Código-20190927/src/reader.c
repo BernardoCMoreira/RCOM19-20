@@ -12,11 +12,12 @@
 #include "application.h"
 #include "application.c"
 
+int readerVAR = TRUE;
 
 int main(int argc, char** argv)
 {
 
 	llopen(argv[1],READER);
-    
+    return 0;
 }
 
