@@ -1,4 +1,11 @@
 #pragma once
+
+/*
+*Porta : (Com1, Com2 etc..)
+*Flag : Indica se é Emissor ou Recetor
+*Retorna o identificador da ligação de dados, ou < 0 em caso de erro
+*/
+
 // MACROS TO MAKE CODE CLEANER
 
 //Emissor / Recetor
@@ -26,6 +33,3 @@
 #define FLAG 0x7E
 #define ESC 0x7D
 #define ESC_OR 0x20
-
-#define CONTROL_FIELD_0 0X00
-#define CONTROL_FIELD_1 0x40 //64 in decimal.
