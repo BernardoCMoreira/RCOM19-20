@@ -13,3 +13,4 @@ int info_state_machine(char byte_received, char* buffer, int* res);
 int llclose(int fd);
 void send_disc_message(void);
 int disc_state_machine(char byte_received);
+void ack_disc_message(char conf[255]);

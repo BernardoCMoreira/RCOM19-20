@@ -583,55 +583,24 @@ int llclose(int fd){
     if (writerVar == TRUE){
         send_disc_message();
         printf("DISC message sent!\n");
-        while (STOP == FALSE && conta < 4)
-        {
-            if (flag)
-            {
-                alarm(3); // activa alarme de 3s
-                flag = 0;
-            }
-            //verify UA message
-            res = read(fd, conf, 1);
-            disc_state_machine(conf[0]);
-            if (conta >= 4)
-            {
-                printf("ERROR: already resent message 3 times\n");
-                return -1;
-            }
-        }
+
+        ack_disc_message(conf);
         sleep(1);
 
-            printf("DISC message received!\n");
-            Send_UA_Message(fd);
-            printf("UA message sent!\n");
-        }
-        else{
+        printf("DISC message received!\n");
+        Send_UA_Message(fd);
+        printf("UA message sent!\n");
+    }
+    else{
 
             //read disc
-             res = read(fd, conf, 1);
-
-            while (STOP == FALSE && conta < 4)
-            {
-                if (flag)
-                {
-                 alarm(3); // activa alarme de 3s
-                 flag = 0;
-                }
-             res = read(fd, conf, 1);
-            disc_state_machine(conf[0]);
-            if (conta >= 4)
-             {
-                 printf("ERROR: already resent message 3 times\n");
-                 return -1;
-                }   
-            }
-
+            ack_disc_message(conf);
             //send disc
       
 
-                printf("DISC message received!");
-                send_disc_message();
-                printf("DISC message sent!");
+            printf("DISC message received!");
+            send_disc_message();
+            printf("DISC message sent!");
             //read ua!
              res = read(fd, conf, 1);
 
@@ -651,7 +620,7 @@ int llclose(int fd){
                 }   
             }
 
-            printf("UA message sent!");
+            printf("UA message received!");
 
          }
    
@@ -659,6 +628,28 @@ int llclose(int fd){
  if (close(fd)<0) 
         return -1;
     return 0;
+}
+
+void ack_disc_message(char conf[255]){
+        (void)signal(SIGALRM, alarm_handler);
+
+            while (STOP == FALSE && conta < 4)
+            {
+                if (flag)
+                {
+                 alarm(3); // activa alarme de 3s
+                 flag = 0;
+                }
+                int res = read(fd, conf, 1);
+                disc_state_machine(conf[0]);
+            if (conta >= 4)
+             {
+                 printf("ERROR: already resent message 3 times\n");
+                 return ;
+                }   
+            }
+
+            printf("DISC message received \n");
 }
 
 void send_disc_message(void){
@@ -678,9 +669,10 @@ void send_disc_message(void){
 
 }
 
-int disc_state_machine(char byte_received){
-     switch (state) {
-
+int disc_state_machine(char byte_received)
+{
+     switch (state)
+     {
     case START:
         if (byte_received == 0x7E)
         {
