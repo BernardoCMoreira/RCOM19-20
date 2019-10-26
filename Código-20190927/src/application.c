@@ -21,12 +21,12 @@ void alarm_handler() // atende alarme
     printf("alarme # %d\n", conta);
     flag = 1;
     conta++;
-    //send_set_message();                 
+    send_set_message();                 
 }
 
 int llopen(char *porta, int flagE_R)
 {
-
+    printf("Trying to open\n");
     int c, res;
     struct termios oldtio;
     int i, sum = 0, speed = 0;
@@ -52,6 +52,7 @@ int llopen(char *porta, int flagE_R)
     {
         perror(porta);
         exit(-1);
+	return -1;
     }
 
     set_save_port_settings(fd, &oldtio);
@@ -79,6 +80,9 @@ int llopen(char *porta, int flagE_R)
                 printf("ERROR: already resent message 3 times\n");
             }
         }
+
+        printf("Read message confirmation: %2s:%d\n", conf, res);
+	
         sleep(1);
     }
     else if (flagE_R == READER)
@@ -93,7 +97,7 @@ int llopen(char *porta, int flagE_R)
 
             if (state == STOP_S)
             {
-                printf("%2s:%d\n", recepBuf, res);
+                printf("Channel open: %2s:%d\n", recepBuf, res);
                 STOP = TRUE;
             }
         }
@@ -102,7 +106,9 @@ int llopen(char *porta, int flagE_R)
 
         sleep(1);
     }
-    return 0;
+
+    printf("Succesfully opened");
+    return fd;
 }
 
 int set_save_port_settings(int fd, struct termios *oldtio)
@@ -155,13 +161,14 @@ char calculateBcc2(char *buffer, int length)
 
 int llwrite(int fd, char * buffer, int length){
 
-	
+	printf("Trying to write message\n");
  	unsigned char *buf = (unsigned char *)malloc((length + 6) * sizeof(unsigned char));
 	int res = length + 6;
 	
 	char bcc2 = calculateBcc2(buffer, length);
 
     buf[0] = 0x7E;
+
 	
     buf[1] = 0x03;
 
@@ -175,6 +182,7 @@ int llwrite(int fd, char * buffer, int length){
 	}
 
     buf[3] = buf[1] ^ buf[2];
+	
 
      int current_index = 4;
   for (int i = 0; i < length; i++)
@@ -184,7 +192,9 @@ int llwrite(int fd, char * buffer, int length){
 	buf = (unsigned char *)realloc(buf, ++res);
 
       buf[current_index] = ESC;
-      buf[current_index+1] = 0x5d;
+      printf("\Stuff %d: %x\n",current_index, buf[current_index]);
+      buf[current_index+1] = 0x5e;
+      printf("\nStuff %d: %x\n",(current_index+1), buf[current_index+1]);
       current_index += 2;
     }
     if (buffer[i] == ESC)
@@ -192,7 +202,9 @@ int llwrite(int fd, char * buffer, int length){
 	buf = (unsigned char *)realloc(buf, ++res);
 
       buf[current_index] = ESC;
-      buf[current_index+1] = 0x5e;
+      printf("\nStuff %d: %x\n",current_index, buf[current_index]);
+      buf[current_index+1] = 0x5d;
+      printf("\nStuff %d: %x\n",(current_index+1), buf[current_index+1]);
       current_index += 2;
     }
     else{
@@ -206,7 +218,9 @@ int llwrite(int fd, char * buffer, int length){
 
 		buf = (unsigned char *)realloc(buf, ++res);
 		buf[current_index] = ESC;
+      		printf("\nStuff BCC %d: %x\n",current_index, buf[current_index]);
 		buf[current_index + 1] = 0x5d;
+      		printf("\nStuff BCC %d: %x\n",(current_index +1), buf[current_index+1]);
       		current_index += 2;
 	}
 
@@ -214,16 +228,28 @@ int llwrite(int fd, char * buffer, int length){
 
 		buf = (unsigned char *)realloc(buf, ++res);
 		buf[current_index] = ESC;
+      		printf("\nStuff BCC %d: %x\n",current_index, buf[current_index]);
 		buf[current_index + 1] = 0x5e;
+      		printf("\nStuff BCC %d: %x\n",(current_index +1), buf[current_index+1]);
       		current_index += 2;
 	}
 
+	printf("Escrevnbdo a flag no index: %d", current_index);
+
+
 	buf[current_index] = FLAG;
 
+	for(int i =0; i < res-1; i++){
+		printf("buf %d: %x\n",i, buf[i]);
+	}
 	
+	printf("FD: %d\n", fd);
 	write(fd, buf, res);
-        (void)signal(SIGALRM, alarm_handler);
+	printf("Message has been written\n");
 
+        /*(void)signal(SIGALRM, alarm_handler);
+
+	//aqui tem de receber a resposta
         char conf[255];
         while (STOP == FALSE && conta < 4)
         {
@@ -234,12 +260,12 @@ int llwrite(int fd, char * buffer, int length){
             }
             res = read(fd, conf, 1);
 
-            ua_state_machine(conf);
+            //ua_state_machine(conf);
             if (conta >= 4)
             {
                 printf("ERROR: already resent message 3 times\n");
             }
-        }
+        }*/
         sleep(1);
 	return 0;
 
@@ -248,17 +274,24 @@ int llwrite(int fd, char * buffer, int length){
 int llread(int fd, char * buffer){
 
 	unsigned char buf;
+	//unsigned char *buf =(unsigned char *)malloc(sizeof(unsigned char)); 
 	int res=0;
+	state=0;
 
-	while(state != BCC_RCV){
+	int count=0;
+	printf("\nFD: %d\n", fd);
+
+	while(state != STOP_S){
 	   
-		read(fd, buf, 1);
-
-        //WHAT VALUES SHOULD WE PUT HERE?
+		read(fd,&buf,1);
+		//printf("Byte_received: %x\n", buf[0]);
         
-		//state = info_state_machine(buf);
+		state = info_state_machine(buf, buffer, &res);
+		count++;
 
 	}
+
+	printf("\n\nMESSAGE SUCCESSFULLY READ\n\n");
 
 	
     return 0;
@@ -269,6 +302,14 @@ int info_state_machine(char byte_received, char* buffer, int* res)
 
     unsigned char controlByte;
     int controlS;
+    if(byte_received != START || state == A_RCV){
+	printf("%x\n",byte_received);}
+
+   /* printf("FLAG char: %x\n", '~');
+    printf("ESC char: %x\n", '}');
+    printf("ESCESC char: %x\n", ']');*/
+
+	
     switch (state)
     {
 
@@ -304,12 +345,14 @@ int info_state_machine(char byte_received, char* buffer, int* res)
             //quando recebe o control com s = 0
 	    controlByte = byte_received;
 	    controlS = 0;
+	    state = C_RCV;
         }
         else if (byte_received == 0x40)
         {
             //quando recebe o control com s = 1 
 	    controlByte = byte_received;
 	    controlS = 1;
+	    state = C_RCV;
         }
 	else if (byte_received==0x7E)
 	{
@@ -322,7 +365,7 @@ int info_state_machine(char byte_received, char* buffer, int* res)
         break;
 
     case C_RCV:
-        if (byte_received == (A_RCV ^ controlByte))
+        if (byte_received == (0x03 ^ controlByte))
         {
             state = BCC_RCV;
         }
@@ -333,47 +376,44 @@ int info_state_machine(char byte_received, char* buffer, int* res)
         break;
 
     case BCC_RCV:
-        if (byte_received == (A_RCV ^ controlByte))
-        {
-            state = BCC_RCV;
-        }
-	else
-	{
-	    state = START;
+	if (byte_received == ESC){
+	    state = ESC_S;
+	    printf("chavetao\n");
+	}
+
+	else if (byte_received == FLAG){
+	    state = STOP_S;
+	}
+	
+
+	else{
+            buffer = (char *)realloc(buffer, ++(*res));
+
+            buffer[*res - 1] = byte_received;
+	    printf("MESSAGE IS: %s AND last byte is: %x \n", buffer, byte_received);
 	}
         break;
 
     case ESC_S: 
-	if(byte_received == 0x5e){
+	if(byte_received == 0x5E){
 		buffer = (char*)realloc(buffer, ++(*res));
+		printf("Imprimindo um } : %x\n", byte_received);
 		buffer[*res-1] = 0x7E;
 	}
 	
-	else if(byte_received == 0x5e){
+	else if(byte_received == 0x5D){
 		buffer = (char*)realloc(buffer, ++(*res));
-		buffer[*res-1] = 0x7E;
+		printf("Imprimindo um }\n");
+		buffer[*res-1] = 0x7D;
 	}
 	else{
 
 		printf("Found invalid character after the escape character");
 	}
-	state = DATA_S;
+	state = BCC_RCV;
 	break;
     
-    case DATA_S:
-	if (byte_received == ESC){
-	    state = ESC_S;
-	}
-
-	if (byte_received == FLAG){
-	    state = STOP_S;
-	}
-
-	else{
-            buffer = (char *)realloc(buffer, ++(*res));
-            buffer[*res - 1] = byte_received;
-	}
-	break;
+  
 
 }
     return state;  	
@@ -460,7 +500,7 @@ int set_state_machine(char byte_received)
 
 void send_set_message()
 {
-
+    printf("Trying to send set message\n");
     char buf[255];
     buf[0] = 0x7E;
 
@@ -474,7 +514,7 @@ void send_set_message()
 
     int res = write(fd, buf, 5);
 
-    printf("%d bytes written\n", res);
+    printf("Message set sent:  %2s:%d\n", buf, res);
 }
 
 void ua_state_machine(char conf[])
@@ -565,15 +605,16 @@ void Send_UA_Message(int fd)
     printf("Trying to send message confirmation.\n");
 
     char buf[255];
+    int res;
     buf[0] = 0x7E;
     buf[1] = 0x03;
     buf[2] = 0x07;
     buf[3] = buf[1] ^ buf[2];
     buf[4] = 0x7E;
 
-    write(fd, buf, 5);
+    res = write(fd, buf, 5);
 
-    printf("Message confirmation sent.\n");
+    printf("Message confirmation sent:  %2s:%d\n", buf, res);
 }
 
 int llclose(int fd){

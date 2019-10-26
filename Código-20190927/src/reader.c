@@ -16,8 +16,10 @@ int readerVAR = TRUE;
 
 int main(int argc, char** argv)
 {
-
-	llopen(argv[1],READER);
+	int fd;
+	unsigned char *buffer = (unsigned char *)malloc(0);
+	fd=llopen(argv[1],READER);
+	llread(fd, buffer);
     return 0;
 }
 
