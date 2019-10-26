@@ -32,6 +32,20 @@
 #define ESC_S 6
 #define DATA_S 7
 
+//control fields
+#define SET 0x03
+#define DISC 0x0B
+#define UA 0x07
+#define RR0 0x05
+#define RR1 0x85
+#define REJ0 0x01
+#define REJ1 0x81
+
+
+
+
+
+
 #define FLAG 0x7E
 #define ESC 0x7D
 #define ESC_OR 0x20

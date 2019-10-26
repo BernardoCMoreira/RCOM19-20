@@ -21,7 +21,7 @@ void alarm_handler() // atende alarme
     printf("alarme # %d\n", conta);
     flag = 1;
     conta++;
-    send_set_message();                 
+    send_svision_message(SET);                 
 }
 
 int llopen(char *porta, int flagE_R)
@@ -61,7 +61,7 @@ int llopen(char *porta, int flagE_R)
 
     if (flagE_R == WRITER)
     {
-        send_set_message();
+        send_svision_message(SET);
         (void)signal(SIGALRM, alarm_handler);
 
         char conf[255];
@@ -74,7 +74,7 @@ int llopen(char *porta, int flagE_R)
             }
             res = read(fd, conf, 1); /* returns after 5 chars have been input */
             //verify UA message
-            ua_state_machine(conf);
+            svision_state_machine(conf, UA);
             if (conta >= 4)
             {
                 printf("ERROR: already resent message 3 times\n");
@@ -102,7 +102,7 @@ int llopen(char *porta, int flagE_R)
             }
         }
 
-        Send_UA_Message(fd);
+        send_svision_Message(fd,UA);
 
         sleep(1);
     }
@@ -420,7 +420,7 @@ int info_state_machine(char byte_received, char* buffer, int* res)
 		 
 }
 
-int set_state_machine(char byte_received)
+int svision_state_machine(char byte_received,char controlField)
 {
 
     switch (state)
@@ -455,7 +455,7 @@ int set_state_machine(char byte_received)
         break;
 
     case A_RCV:
-        if (byte_received == 0x03)
+        if (byte_received == controlField)
         {
             state = C_RCV;
         }
@@ -498,15 +498,15 @@ int set_state_machine(char byte_received)
     return state;
 }
 
-void send_set_message()
+void send_svision_message(char controlField)
 {
-    printf("Trying to send set message\n");
+    printf("Trying to send svision message\n");
     char buf[255];
     buf[0] = 0x7E;
 
     buf[1] = 0x03;
 
-    buf[2] = 0x03;
+    buf[2] = controlField;
 
     buf[3] = buf[1] ^ buf[2];
 
@@ -514,108 +514,10 @@ void send_set_message()
 
     int res = write(fd, buf, 5);
 
-    printf("Message set sent:  %2s:%d\n", buf, res);
+    printf("Message svision sent:  %2s:%d\n", buf, res);
 }
 
-void ua_state_machine(char conf[])
-{
-    switch (state)
-    {
 
-    case START:
-        if (conf[0] == 0x7E)
-        {
-            state = FLAG_RCV;
-        }
-        else
-        {
-            state = START;
-        }
-
-        break;
-
-    case FLAG_RCV:
-
-        if (conf[0] == 0x03)
-        {
-            state = A_RCV;
-        }
-        else if (conf[0] == 0x7E)
-        {
-            state = FLAG_RCV;
-        }
-        else
-        {
-            state = START;
-        }
-        break;
-
-    case A_RCV:
-        if (conf[0] == 0x07)
-        {
-            state = C_RCV;
-        }
-        else if (conf[0] == 0x7E)
-        {
-            state = FLAG_RCV;
-        }
-        else
-        {
-            state = START;
-        }
-        break;
-
-    case C_RCV:
-        if (conf[0] == 0x7E)
-        {
-            state = FLAG_RCV;
-        }
-        if (conf[0] == (0x03 ^ 0x07))
-        {
-            state = BCC_RCV;
-        }
-        else
-        {
-            state = START;
-        }
-        break;
-
-    case BCC_RCV:
-        if (conf[0] == 0x7E)
-        {
-            state = STOP_S;
-        }
-        else
-        {
-            state = START;
-        }
-    }
-
-    if (state == STOP_S)
-    { /* so we can printf... */
-        printf("\nConfirmation message was obtained succesfully\n");
-        STOP = TRUE;
-        alarm(0);
-    }
-}
-
-void Send_UA_Message(int fd)
-{
-
-    printf("Trying to send message confirmation.\n");
-
-    char buf[255];
-    int res;
-    buf[0] = 0x7E;
-    buf[1] = 0x03;
-    buf[2] = 0x07;
-    buf[3] = buf[1] ^ buf[2];
-    buf[4] = 0x7E;
-
-    res = write(fd, buf, 5);
-
-    printf("Message confirmation sent:  %2s:%d\n", buf, res);
-}
 
 int llclose(int fd){
     char conf[255];
@@ -629,7 +531,7 @@ int llclose(int fd){
         sleep(1);
 
         printf("DISC message received!\n");
-        Send_UA_Message(fd);
+        send_svision_Message(fd,UA);
         printf("UA message sent!\n");
     }
     else{
@@ -653,7 +555,7 @@ int llclose(int fd){
                  flag = 0;
                 }
             res = read(fd, conf, 1);
-            ua_state_machine(conf);
+            svision_state_machine(conf,UA);
             if (conta >= 4)
              {
                  printf("ERROR: already resent message 3 times\n");
