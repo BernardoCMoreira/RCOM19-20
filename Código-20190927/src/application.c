@@ -21,7 +21,7 @@ void alarm_handler() // atende alarme
     printf("alarme # %d\n", conta);
     flag = 1;
     conta++;
-    send_svision_message(SET);                 
+    send_set_message();                 
 }
 
 int llopen(char *porta, int flagE_R)
@@ -61,7 +61,7 @@ int llopen(char *porta, int flagE_R)
 
     if (flagE_R == WRITER)
     {
-        send_svision_message(SET);
+        send_set_message();
         (void)signal(SIGALRM, alarm_handler);
 
         char conf[255];
@@ -74,7 +74,7 @@ int llopen(char *porta, int flagE_R)
             }
             res = read(fd, conf, 1); /* returns after 5 chars have been input */
             //verify UA message
-            svision_state_machine(conf[0],UA);
+            ua_state_machine(conf);
             if (conta >= 4)
             {
                 printf("ERROR: already resent message 3 times\n");
@@ -93,7 +93,7 @@ int llopen(char *porta, int flagE_R)
 
             res = read(fd, recepBuf, 1); /* returns after 5 chars have been input */
 
-            state = svision_state_machine(recepBuf[0],SET);
+            state = svision_state_machine(recepBuf[0], SET);
 
             if (state == STOP_S)
             {
@@ -102,7 +102,7 @@ int llopen(char *porta, int flagE_R)
             }
         }
 
-        send_svision_message(UA);
+        Send_UA_Message(fd);
 
         sleep(1);
     }
@@ -192,7 +192,7 @@ int llwrite(int fd, char * buffer, int length){
 	buf = (unsigned char *)realloc(buf, ++res);
 
       buf[current_index] = ESC;
-      printf("\nStuff %d: %x\n",current_index, buf[current_index]);
+      printf("\Stuff %d: %x\n",current_index, buf[current_index]);
       buf[current_index+1] = 0x5e;
       printf("\nStuff %d: %x\n",(current_index+1), buf[current_index+1]);
       current_index += 2;
@@ -420,7 +420,7 @@ int info_state_machine(char byte_received, char* buffer, int* res)
 		 
 }
 
-int svision_state_machine(char byte_received,char controlField)
+int svision_state_machine(char byte_received, char controlField)
 {
 
     switch (state)
@@ -498,15 +498,15 @@ int svision_state_machine(char byte_received,char controlField)
     return state;
 }
 
-void send_svision_message(char controlField)
+void send_set_message()
 {
-    printf("Trying to send svision message\n");
+    printf("Trying to send set message\n");
     char buf[255];
     buf[0] = 0x7E;
 
     buf[1] = 0x03;
 
-    buf[2] = controlField;
+    buf[2] = 0x03;
 
     buf[3] = buf[1] ^ buf[2];
 
@@ -514,24 +514,122 @@ void send_svision_message(char controlField)
 
     int res = write(fd, buf, 5);
 
-    printf("Message svision sent:  %2s:%d\n", buf, res);
+    printf("Message set sent:  %2s:%d\n", buf, res);
 }
 
+void ua_state_machine(char conf[])
+{
+    switch (state)
+    {
 
+    case START:
+        if (conf[0] == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+
+        break;
+
+    case FLAG_RCV:
+
+        if (conf[0] == 0x03)
+        {
+            state = A_RCV;
+        }
+        else if (conf[0] == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+        break;
+
+    case A_RCV:
+        if (conf[0] == 0x07)
+        {
+            state = C_RCV;
+        }
+        else if (conf[0] == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+        break;
+
+    case C_RCV:
+        if (conf[0] == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        if (conf[0] == (0x03 ^ 0x07))
+        {
+            state = BCC_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+        break;
+
+    case BCC_RCV:
+        if (conf[0] == 0x7E)
+        {
+            state = STOP_S;
+        }
+        else
+        {
+            state = START;
+        }
+    }
+
+    if (state == STOP_S)
+    { /* so we can printf... */
+        printf("\nConfirmation message was obtained succesfully\n");
+        STOP = TRUE;
+        alarm(0);
+    }
+}
+
+void Send_UA_Message(int fd)
+{
+
+    printf("Trying to send message confirmation.\n");
+
+    char buf[255];
+    int res;
+    buf[0] = 0x7E;
+    buf[1] = 0x03;
+    buf[2] = 0x07;
+    buf[3] = buf[1] ^ buf[2];
+    buf[4] = 0x7E;
+
+    res = write(fd, buf, 5);
+
+    printf("Message confirmation sent:  %2s:%d\n", buf, res);
+}
 
 int llclose(int fd){
     char conf[255];
     int res;
     //if sender:: send DISC, read DISC, SEND UA!
     if (writerVar == TRUE){
-        send_svision_message(DISC);
+        send_disc_message();
         printf("DISC message sent!\n");
 
         ack_disc_message(conf);
         sleep(1);
 
         printf("DISC message received!\n");
-        send_svision_message(UA);
+        Send_UA_Message(fd);
         printf("UA message sent!\n");
     }
     else{
@@ -542,7 +640,7 @@ int llclose(int fd){
       
 
             printf("DISC message received!");
-            send_svision_message(DISC);
+            send_disc_message();
             printf("DISC message sent!");
             //read ua!
              res = read(fd, conf, 1);
@@ -555,7 +653,7 @@ int llclose(int fd){
                  flag = 0;
                 }
             res = read(fd, conf, 1);
-            svision_state_machine(conf[0],UA);
+            ua_state_machine(conf);
             if (conta >= 4)
              {
                  printf("ERROR: already resent message 3 times\n");
@@ -584,7 +682,7 @@ void ack_disc_message(char conf[255]){
                  flag = 0;
                 }
                 int res = read(fd, conf, 1);
-                svision_state_machine(conf[0],DISC);
+                disc_state_machine(conf[0]);
             if (conta >= 4)
              {
                  printf("ERROR: already resent message 3 times\n");
@@ -595,3 +693,101 @@ void ack_disc_message(char conf[255]){
             printf("DISC message received \n");
 }
 
+void send_disc_message(void){
+
+    char buf[255];
+    buf[0] = 0x7E;
+
+    buf[1] = 0x03;
+
+    buf[2] = 0x0B;              
+
+    buf[3] = buf[1] ^ buf[2];
+
+    buf[4] = 0x7E;
+
+    int res = write(fd, buf, 5);
+
+}
+
+int disc_state_machine(char byte_received)
+{
+     switch (state)
+     {
+    case START:
+        if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+
+        break;
+
+    case FLAG_RCV:
+
+        if (byte_received == 0x03)
+        {
+            state = A_RCV;
+        }
+        else if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+        break;
+
+    case A_RCV:
+        if (byte_received == 0x0B)
+        {
+            state = C_RCV;
+        }
+        else if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+        break;
+
+    case C_RCV:
+        if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        if (byte_received == (0x03 ^ 0x0B))
+        {
+            state = BCC_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+        break;
+
+    case BCC_RCV:
+        if (byte_received == 0x7E)
+        {
+            state = STOP_S;
+        }
+        else
+        {
+            state = START;
+        }
+    }
+      if (state == STOP_S)
+    { /* so we can printf... */
+        printf("\nConfirmation message was obtained succesfully\n");
+        STOP = TRUE;
+        alarm(0);
+    }
+
+    return state;
+}
