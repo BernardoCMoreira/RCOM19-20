@@ -9,6 +9,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
+#include <math.h>
 #include "definitions.h"
 #include "application.h"
 #include "application.c"
@@ -23,7 +24,7 @@ int main(int argc, char** argv)
 	FILE *file;
 	struct stat fileInfo;
 	char *buffer;
-	off_t *fileSize = (off_t*)malloc(sizeof(off_t*));
+	int *fileSize = (int*)malloc(sizeof(int*));
 	char* fileName = argv[2];
 
 	if ((file = fopen(fileName, "rb")) == NULL){
@@ -38,8 +39,7 @@ int main(int argc, char** argv)
 	buffer = (char *)malloc(*fileSize);
 
 	fread(buffer, sizeof(char), *fileSize, file);
-
-
+	
 
 	int fd;
 	fd=llopen(argv[1],WRITER);
@@ -81,7 +81,7 @@ int main(int argc, char** argv)
 }
 
 
-char* getControlPacket(char controlField, off_t fileSize, char* fileName, int fileNameLength, int* res){
+char* getControlPacket(char controlField, int fileSize, char* fileName, int fileNameLength, int* res){
 
 	
 	*res = fileNameLength + 9 * sizeof(char);
@@ -89,20 +89,46 @@ char* getControlPacket(char controlField, off_t fileSize, char* fileName, int fi
 
 	packet[0] = controlField;
 	packet[1] = PACK_SIZE;
-	packet[2] = PS_LENGTH;
-	packet[3] = (fileSize >> 24) & 0xFF;
-	packet[4] = (fileSize >> 16) & 0xFF;
-	packet[5] = (fileSize >> 8) & 0xFF;
-	packet[6] = fileSize & 0xFF;
-	packet[7] = PACK_NAME;
-	packet[8] = fileNameLength;
+
+
+	int digitNumber=0;
+	int n = fileSize;
+
+	while(n != 0){
+		n /= 10;
+		++digitNumber;
+	}
+
+
+	packet[2] = digitNumber;
 
 	
-	for (int i = 0; i < fileNameLength; i++){
+  	char str[digitNumber];
 
-	    packet[i+9] = fileName[i];
+  	sprintf(str, "%d", fileSize);
+
+	
+	for(int i=0; i < digitNumber; i++){
+		
+		packet[3+i]=str[i];
 
 	}
+
+
+	packet[2+digitNumber+1] = PACK_NAME;
+	packet[2+digitNumber+2] = fileNameLength;
+
+	
+	
+	for (int j = 0; j < fileNameLength; j++){
+
+	    packet[2+digitNumber+2+j] = fileName[j];
+
+	}
+
+	printf("\n\n\n Length of file name: %c \nSize of File packets: %s\n packet 1: %c\n packet 2: %c\n packet 3: %c\n packet 4: %c\n packet 5: %c\n PACK_NAME: %x\n\n",packet[2+digitNumber+2],str,packet[3],packet[4],packet[5],packet[6],packet[7],packet[8]);
+
+
 
 	return packet;
 
