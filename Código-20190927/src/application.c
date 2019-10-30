@@ -212,7 +212,7 @@ int llwrite(int fd, char * buffer, int length){
     {
 	buf = (unsigned char *)realloc(buf, ++res);
 
-      buf[current_index] = ESC;
+      buf[current_index] = ESC;  
       printf("\nStuff %d: %x\n",current_index, buf[current_index]);
       buf[current_index+1] = 0x5e;
       printf("\nStuff %d: %x\n",(current_index+1), buf[current_index+1]);
@@ -310,8 +310,7 @@ int llwrite(int fd, char * buffer, int length){
 
 int llread(int fd, char * buffer){
 
-	unsigned char buf;
-	//unsigned char *buf =(unsigned char *)malloc(sizeof(unsigned char)); 
+	unsigned char buf; 
 	int res=0;
 	state=0;
 	int rByte=-1;
@@ -322,14 +321,10 @@ int llread(int fd, char * buffer){
 	while(state != STOP_S){
 	   
 		read(fd,&buf,1);
-		//printf("Byte_received: %x\n", buf);
-        
 		state = info_state_machine(buf, buffer, &res, &rByte);
 		count++;
-
 	}
 
-	
 	if(checkBcc2(buffer,res)){
 		send_rr_message(rByte);	
 		printf("Confirmation Succesful.\n");
@@ -338,9 +333,6 @@ int llread(int fd, char * buffer){
 		send_rej_message(rByte);
 		printf("Confirmation Failed.\n");
 	}
-
-
-	
 
 	printf("\n\nMESSAGE SUCCESSFULLY READ\n\n");
 
@@ -354,11 +346,6 @@ int info_state_machine(char byte_received, char* buffer, int* res, int* rByte)
     unsigned char controlByte;
     if(byte_received != START || state == A_RCV){
 	printf("%x\n",byte_received);}
-
-   /* printf("FLAG char: %x\n", '~');
-    printf("ESC char: %x\n", '}');
-    printf("ESCESC char: %x\n", ']');*/
-
 	
     switch (state)
     {
