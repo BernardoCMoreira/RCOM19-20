@@ -122,13 +122,11 @@ int main(int argc, char** argv)
 
 
 	  }
-
-
-
-
-
-
-
+	FILE *f = fopen((char *)fileName, "wb+");
+	fwrite((void *)fileBlob, 1 , blobSize, f);
+	fclose(f);
+	printf("CREATED FILE :%s \n",fileName);
+	llclose(fd);
 
 
 

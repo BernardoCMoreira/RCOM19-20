@@ -322,7 +322,7 @@ int llread(int fd, char * buffer){
 	while(state != STOP_S){
 	   
 		read(fd,&buf,1);
-		//printf("Byte_received: %x\n", buf[0]);
+		//printf("Byte_received: %x\n", buf);
         
 		state = info_state_machine(buf, buffer, &res, &rByte);
 		count++;
@@ -345,7 +345,7 @@ int llread(int fd, char * buffer){
 	printf("\n\nMESSAGE SUCCESSFULLY READ\n\n");
 
 	
-    return 0;
+    return res;
 }
 
 int info_state_machine(char byte_received, char* buffer, int* res, int* rByte)
