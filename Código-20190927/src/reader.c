@@ -1,23 +1,24 @@
 /*Non-Canonical Input Processing*/
 #include "reader.h"
 
-int esperado = 0;
+int expectedControlByte = 0;
 struct termios oldtio, newtio;
 
 int main(int argc, char **argv)
 {
   int fd;
-  int sizeMessage = 0;
-  unsigned char *mensagemPronta;
-  int sizeOfStart = 0;
-  unsigned char *start;
-  off_t sizeOfGiant = 0;
-  unsigned char *giant;
+  int res = 0;
+  int startPacketSize = 0;
+  off_t blobSize = 0;
   off_t index = 0;
+  unsigned char *buffer;
+  unsigned char *startPacket;
+  unsigned char *blob;
 
   if ((argc < 2) ||
       ((strcmp("/dev/ttyS0", argv[1]) != 0) &&
-       (strcmp("/dev/ttyS1", argv[1]) != 0)))
+       (strcmp("/dev/ttyS1", argv[1]) != 0) &&
+       (strcmp("/dev/ttyS2", argv[1]) != 0)))
   {
     printf("Usage:\tnserial SerialPort\n\tex: nserial /dev/ttyS1\n");
     exit(1);
@@ -33,59 +34,76 @@ int main(int argc, char **argv)
     exit(-1);
   }
 
-
+  printf("Establishing connection...\n");
   llopen(fd);
-  start = llread(fd, &sizeOfStart);
+  printf("Connection established\n");
 
+  //reading and parsing start packet
   
-  int L2 = (int)start[8];
-  unsigned char *nameOfFile = (unsigned char *)malloc(L2 + 1);
+
+  printf("Reading start packet...\n");
+  startPacket = llread(fd, &startPacketSize);
+ 
+  int L2 = (int)startPacket[8];
+  unsigned char *fileName = (unsigned char *)malloc(L2 + 1);
 
   
   for (int i = 0; i < L2; i++)
   {
-    nameOfFile[i] = start[9 + i];
+    fileName[i] = startPacket[9 + i];
   }
 
-  nameOfFile[L2] = '\0';
+  fileName[L2] = '\0';
 
+
+  printf("Start packet obtained\n");
   
-  sizeOfGiant = (start[3] << 24) | (start[4] << 16) | (start[5] << 8) | (start[6]);
+  //reading data packets
 
-  giant = (unsigned char *)malloc(sizeOfGiant);
+  printf("Reading data packets...\n");
+
+  blobSize = (startPacket[3] << 24) | (startPacket[4] << 16) | (startPacket[5] << 8) | (startPacket[6]);
+
+  blob = (unsigned char *)malloc(blobSize);
 
   while (TRUE)
   {
-    mensagemPronta = llread(fd, &sizeMessage);
-    if (sizeMessage == 0)
+    buffer = llread(fd, &res);
+    if (res == 0)
       continue;
-    if (reachedEnd(mensagemPronta))
+    if (reachedEnd(buffer))
     {
-      printf("End message received\n");
+      printf("End message has been reached\n");
       break;
     }
 
     int sizeWithoutHeader = 0;
 
-    mensagemPronta = removeHeader(mensagemPronta, sizeMessage, &sizeWithoutHeader);
+    buffer = removeHeader(buffer, res, &sizeWithoutHeader);
 
-    memcpy(giant + index, mensagemPronta, sizeWithoutHeader);
+    memcpy(blob + index, buffer, sizeWithoutHeader);
     index += sizeWithoutHeader;
   }
 
-  printf("Mensagem: \n");
-  int i = 0;
-  for (; i < sizeOfGiant; i++)
-  {
-    printf("%x", giant[i]);
-  }
+  
+  printf("Data packets have been read succesfully\n");
 
+  //saving to file
 
-  FILE *file = fopen((char *)nameOfFile, "wb+");
-  fwrite((void *)giant, 1, sizeOfGiant, file);
+  printf("Creating file...\n");
+
+  FILE *file = fopen((char *)fileName, "wb+");
+  fwrite((void *)blob, 1, blobSize, file);
   fclose(file);
 
+
+  printf("File done\n");
+
+
+
+
   llclose(fd);
+
 
   sleep(1);
  
@@ -140,21 +158,23 @@ if (tcgetattr(fd, &oldtio) == -1)
     exit(-1);
   }
 
+  printf("Reading SET message...\n");
   if (control_state_machine(fd, SET))
   {
-    printf("Recebeu SET\n");
+
+    printf("SET message succesfully written\n");
     write_ctrl_frame(fd, UA);
-    printf("Mandou UA\n");
   }
+  printf("Sent UA message comfirmation\n");
 }
 
-unsigned char *llread(int fd, int *sizeMessage)
+unsigned char *llread(int fd, int *bufferSize)
 {
-  unsigned char *message = (unsigned char *)malloc(0);
-  *sizeMessage = 0;
+  unsigned char *buffer = (unsigned char *)malloc(0);
+  *bufferSize = 0;
   unsigned char c_read;
-  int trama = 0;
-  int mandarDados = FALSE;
+  int frame = 0;
+  int sendStatus = FALSE;
   unsigned char c;
   int state = 0;
 
@@ -181,13 +201,13 @@ unsigned char *llread(int fd, int *sizeMessage)
     case 2:
       if (c == C10)
       {
-        trama = 0;
+        frame = 0;
         c_read = c;
         state = 3;
       }
       else if (c == C11)
       {
-        trama = 1;
+        frame = 1;
         c_read = c;
         state = 3;
       }
@@ -208,26 +228,24 @@ unsigned char *llread(int fd, int *sizeMessage)
     case 4:
       if (c == FLAG_RCV)
       {
-        if (checkBcc2(message, *sizeMessage))
+        if (checkBcc2(buffer, *bufferSize))
         {
-          if (trama == 0)
+          if (frame == 0)
             write_ctrl_frame(fd, RR1);
           else
             write_ctrl_frame(fd, RR0);
 
           state = 6;
-          mandarDados = TRUE;
-          printf("Enviou RR, T: %d\n", trama);
+          sendStatus = TRUE;
         }
         else
         {
-          if (trama == 0)
+          if (frame == 0)
             write_ctrl_frame(fd, REJ1);
           else
             write_ctrl_frame(fd, REJ0);
           state = 6;
-          mandarDados = FALSE;
-          printf("Enviou REJ, T: %d\n", trama);
+          sendStatus = FALSE;
         }
       }
       else if (c == ESC)
@@ -236,26 +254,26 @@ unsigned char *llread(int fd, int *sizeMessage)
       }
       else
       {
-        message = (unsigned char *)realloc(message, ++(*sizeMessage));
-        message[*sizeMessage - 1] = c;
+        buffer = (unsigned char *)realloc(buffer, ++(*bufferSize));
+        buffer[*bufferSize - 1] = c;
       }
       break;
     case 5:
       if (c == 0x5E)
       {
-        message = (unsigned char *)realloc(message, ++(*sizeMessage));
-        message[*sizeMessage - 1] = FLAG_RCV;
+        buffer = (unsigned char *)realloc(buffer, ++(*bufferSize));
+        buffer[*bufferSize - 1] = FLAG_RCV;
       }
       else
       {
         if (c == 0x5D)
         {
-          message = (unsigned char *)realloc(message, ++(*sizeMessage));
-          message[*sizeMessage - 1] = ESC;
+          buffer = (unsigned char *)realloc(buffer, ++(*bufferSize));
+          buffer[*bufferSize - 1] = ESC;
         }
         else
         {
-          perror("Non valid character after escape character");
+          perror("Character after ESC not recognized");
           exit(-1);
         }
       }
@@ -263,22 +281,21 @@ unsigned char *llread(int fd, int *sizeMessage)
       break;
     }
   }
-  printf("Message size: %d\n", *sizeMessage);
-  message = (unsigned char *)realloc(message, *sizeMessage - 1);
+  buffer = (unsigned char *)realloc(buffer, *bufferSize - 1);
 
-  *sizeMessage = *sizeMessage - 1;
-  if (mandarDados)
+  *bufferSize = *bufferSize - 1;
+  if (sendStatus)
   {
-    if (trama == esperado)
+    if (frame == expectedControlByte)
     {
-      esperado ^= 1;
+      expectedControlByte ^= 1;
     }
     else
-      *sizeMessage = 0;
+      *bufferSize = 0;
   }
   else
-    *sizeMessage = 0;
-  return message;
+    *bufferSize = 0;
+  return buffer;
 }
 
 int checkBcc2(unsigned char *buffer, int res){

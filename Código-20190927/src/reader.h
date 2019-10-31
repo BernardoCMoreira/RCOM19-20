@@ -10,19 +10,19 @@
 #include "definitions.h"
 
 
-void llopen(int fd);//
+void llopen(int fd);
 
-unsigned char *llread(int fd, int *sizeMessage);//
+unsigned char *llread(int fd, int *bufferSize);
 
 void llclose(int fd);//
 
-int control_state_machine(int fd, unsigned char controlByte); //
+int control_state_machine(int fd, unsigned char controlByte); 
 
-void write_ctrl_frame(int fd, unsigned char controlByte); //
+void write_ctrl_frame(int fd, unsigned char controlByte); 
 
-int checkBcc2(unsigned char *buffer, int res); //
+int checkBcc2(unsigned char *buffer, int res); 
 
-unsigned char *removeHeader(unsigned char *buffer, int bufferLength, int *dataLength); //
+unsigned char *removeHeader(unsigned char *buffer, int bufferLength, int *dataLength); 
 
-int reachedEnd(unsigned char *end);
+int reachedEnd(unsigned char *end); 
 
