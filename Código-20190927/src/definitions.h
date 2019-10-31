@@ -35,9 +35,22 @@
 #define REJ1 0x81
 
 //control packets
+#define C_START 0x02
 #define C_END 0x03
 
 //byte stuffing
 #define ESC 0x7D
+
+#define NUM_ALARM 3
+#define TIMEOUT 3
+#define INITIAL_PACKET_SIZE 100
+
+#define DATA_PACKET 0x01
+
+//TLV
+#define T1 0x00
+#define T2 0x01
+#define L1 0x04
+#define L2 0x0B
 
 
