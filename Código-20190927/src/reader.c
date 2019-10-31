@@ -44,16 +44,16 @@ int main(int argc, char **argv)
   printf("Reading start packet...\n");
   startPacket = llread(fd, &startPacketSize);
  
-  int L2 = (int)startPacket[8];
-  unsigned char *fileName = (unsigned char *)malloc(L2 + 1);
+  int L2Byte = (int)startPacket[8];
+  unsigned char *fileName = (unsigned char *)malloc(L2Byte + 1);
 
   
-  for (int i = 0; i < L2; i++)
+  for (int i = 0; i < L2Byte; i++)
   {
     fileName[i] = startPacket[9 + i];
   }
 
-  fileName[L2] = '\0';
+  fileName[L2Byte] = '\0';
 
 
   printf("Start packet obtained\n");
@@ -296,119 +296,4 @@ unsigned char *llread(int fd, int *bufferSize)
   else
     *bufferSize = 0;
   return buffer;
-}
-
-int checkBcc2(unsigned char *buffer, int res){
-
-  unsigned char bcc2 = buffer[0];
-
-  for (int i = 1; i < res - 1; i++)
-  {
-    bcc2 ^= buffer[i];
-  }
-
-  if (bcc2 == buffer[res - 1])
-  {
-    return 1;
-  }
-  else
-    return 2;
-
-}
-
-void write_ctrl_frame(int fd, unsigned char controlByte){
-
-  unsigned char frame[5];
-  frame[0] = FLAG_RCV;
-  frame[1] = A_RCV;
-  frame[2] = controlByte;
-  frame[3] = frame[1] ^ frame[2];
-  frame[4] = FLAG_RCV;
-
-  write(fd, frame, 5);
-}
-
-int control_state_machine(int fd, unsigned char controlByte)
-{
-  int state = 0;
-  unsigned char byte_received;
-
-  while (state != 5)
-  {
-    read(fd, &byte_received, 1);
-
-    switch (state)
-    {
-    case 0:
-      if (byte_received == FLAG_RCV)
-        state = 1;
-      break;
-
-    case 1:
-      if (byte_received == A_RCV)
-        state = 2;
-      else
-      {
-        if (byte_received == FLAG_RCV)
-          state = 1;
-        else
-          state = 0;
-      }
-      break;
-
-    case 2:
-      if (byte_received == controlByte)
-        state = 3;
-      else
-      {
-        if (byte_received == FLAG_RCV)
-          state = 1;
-        else
-          state = 0;
-      }
-      break;
-
-    case 3:
-      if (byte_received == (A_RCV ^ controlByte))
-        state = 4;
-      else
-        state = 0;
-      break;
-      
-    case 4:
-      if (byte_received == FLAG_RCV)
-      {
-        state = 5;
-      }
-      else
-        state = 0;
-      break;
-    }
-  }
-  return 1;
-}
-
-unsigned char *removeHeader(unsigned char *buffer, int bufferLength, int *dataLength)
-{
-  
-  unsigned char *noHeader = (unsigned char *)malloc(bufferLength - 4);
-
-  for (int i = 0; i < bufferLength; i++)
-  {
-    noHeader[i] = buffer[i+4];
-  }
-
-  *dataLength = bufferLength - 4;
-
-  return noHeader;
-}
-
-int reachedEnd(unsigned char *end)
-{
-    if (end[0] == C_END)
-      return 1;
-    else
-      return 0;
-    
-    
 }
