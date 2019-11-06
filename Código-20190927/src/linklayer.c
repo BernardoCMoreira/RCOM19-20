@@ -9,321 +9,611 @@
 #include <signal.h>
 #include "linklayer.h"
 
-int packetNumber = 0;
-int stop = 0;
-extern int flag ;
 
-int control_state_machine(int fd, unsigned char controlByte)
+
+int svision_state_machine(char byte_received, char controlField, int state)
 {
-  int state = 0;
-  unsigned char byte_received;
-
-  while (state != 5)
-  {
-    read(fd, &byte_received, 1);
 
     switch (state)
     {
-    case 0:
-      if (byte_received == FLAG_RCV)
-        state = 1;
-      break;
 
-    case 1:
-      if (byte_received == A_RCV)
-        state = 2;
-      else
-      {
-        if (byte_received == FLAG_RCV)
-          state = 1;
+    case START:
+        if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
         else
-          state = 0;
-      }
-      break;
+        {
+            state = START;
+        }
 
-    case 2:
-      if (byte_received == controlByte)
-        state = 3;
-      else
-      {
-        if (byte_received == FLAG_RCV)
-          state = 1;
+        break;
+
+    case FLAG_RCV:
+
+        if (byte_received == 0x03)
+        {
+            state = A_RCV;
+        }
+        else if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
         else
-          state = 0;
-      }
-      break;
+        {
+            state = START;
+        }
+        break;
 
-    case 3:
-      if (byte_received == (A_RCV ^ controlByte))
-        state = 4;
-      else
-        state = 0;
-      break;
-      
-    case 4:
-      if (byte_received == FLAG_RCV)
-      {
-        state = 5;
-      }
-      else
-        state = 0;
-      break;
+    case A_RCV:
+        if (byte_received == controlField)
+        {
+            state = C_RCV;
+        }
+        else if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+        break;
+
+    case C_RCV:
+        if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        if (byte_received == (0x03 ^ 0x03))
+        {
+            state = BCC_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+        break;
+
+    case BCC_RCV:
+        if (byte_received == 0x7E)
+        {
+            state = STOP_S;
+        }
+        else
+        {
+            state = START;
+        }
     }
-  }
-  return 1;
+
+    return state;
+}
+
+int info_state_machine(char byte_received, char* buffer, int* res, int* rByte, int state)
+{
+
+    unsigned char controlByte;
+    if(byte_received != START || state == A_RCV){
+	printf("%x\n",byte_received);}
+	
+    switch (state)
+    {
+
+    case START:
+        if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        else
+        {
+            state = START; 
+        }
+        break;
+	
+    case FLAG_RCV:
+        if (byte_received == 0x03)
+        {
+            state = A_RCV;
+        }
+        else if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV; 
+        }
+	else
+	{
+	    state = START;
+	}
+        break;
+    
+    case A_RCV:
+        if (byte_received == 0x00)
+        {
+            //quando recebe o control com s = 0
+	    controlByte = byte_received;
+	    *rByte = 0;
+	    state = C_RCV;
+        }
+        else if (byte_received == 0x40)
+        {
+            //quando recebe o control com s = 1 
+	    controlByte = byte_received;
+	    *rByte = 2;
+	    state = C_RCV;
+        }
+	else if (byte_received==0x7E)
+	{
+	    state = FLAG_RCV;
+	}
+	else
+	{
+	    state = START;
+	}
+        break;
+
+    case C_RCV:
+        if (byte_received == (0x03 ^ controlByte))
+        {
+            state = BCC_RCV;
+        }
+	else
+	{
+	    state = START;
+	}
+        break;
+
+    case BCC_RCV:
+	if (byte_received == ESC){
+	    state = ESC_S;
+	    printf("chavetao\n");
+	}
+
+	else if (byte_received == FLAG){
+	    state = STOP_S;
+	}
+	
+
+	else{
+            buffer = (char *)realloc(buffer, ++(*res));
+
+            buffer[*res - 1] = byte_received;
+	    printf("MESSAGE IS: %s AND last byte is: %x \n", buffer, byte_received);
+	}
+        break;
+
+    case ESC_S: 
+	if(byte_received == 0x5E){
+		buffer = (char*)realloc(buffer, ++(*res));
+		printf("Imprimindo um } : %x\n", byte_received);
+		buffer[*res-1] = 0x7E;
+	}
+	
+	else if(byte_received == 0x5D){
+		buffer = (char*)realloc(buffer, ++(*res));
+		printf("Imprimindo um }\n");
+		buffer[*res-1] = 0x7D;
+	}
+	else{
+
+		printf("Found invalid character after the escape character");
+	}
+	state = BCC_RCV;
+	break;
+	
+    
+  
+
+    }
+    return state;  	
+		 
+}
+
+
+void ua_state_machine(char conf[], int state)
+{
+    switch (state)
+    {
+
+    case START:
+        if (conf[0] == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+
+        break;
+
+    case FLAG_RCV:
+
+        if (conf[0] == 0x03)
+        {
+            state = A_RCV;
+        }
+        else if (conf[0] == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+        break;
+
+    case A_RCV:
+        if (conf[0] == 0x07)
+        {
+            state = C_RCV;
+        }
+        else if (conf[0] == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+        break;
+
+    case C_RCV:
+        if (conf[0] == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        if (conf[0] == (0x03 ^ 0x07))
+        {
+            state = BCC_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+        break;
+
+    case BCC_RCV:
+        if (conf[0] == 0x7E)
+        {
+            state = STOP_S;
+        }
+        else
+        {
+            state = START;
+        }
+    }
+
+   
+}
+
+int disc_state_machine(char byte_received, int state)
+{
+     switch (state)
+     {
+    case START:
+        if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+
+        break;
+
+    case FLAG_RCV:
+
+        if (byte_received == 0x03)
+        {
+            state = A_RCV;
+        }
+        else if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+        break;
+
+    case A_RCV:
+        if (byte_received == 0x0B)
+        {
+            state = C_RCV;
+        }
+        else if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+        break;
+
+    case C_RCV:
+        if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        if (byte_received == (0x03 ^ 0x0B))
+        {
+            state = BCC_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+        break;
+
+    case BCC_RCV:
+        if (byte_received == 0x7E)
+        {
+            state = STOP_S;
+        }
+        else
+        {
+            state = START;
+        }
+    }
+
+    return state;
+}
+
+
+void rr_state_machine(char byte_received, char controlBuf, int state)
+{
+    switch (state)
+    {
+
+    case START:
+        if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+
+        break;
+
+    case FLAG_RCV:
+
+        if (byte_received == 0x03)
+        {
+            state = A_RCV;
+        }
+        else if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+        break;
+
+    case A_RCV:
+        if ((byte_received == RR0 || byte_received == REJ0) && controlBuf == 0x00)
+        {
+            state = C_RCV;
+        } 
+	if ((byte_received == RR1 || byte_received == REJ1) && controlBuf == 0x40)
+        {
+            state = C_RCV;
+        }
+        else if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+        break;
+
+    case C_RCV:
+        if (byte_received == 0x7E)
+        {
+            state = FLAG_RCV;
+        }
+        if (byte_received == (0x03 ^ 0x07))
+        {
+            state = BCC_RCV;
+        }
+        else
+        {
+            state = START;
+        }
+        break;
+
+    case BCC_RCV:
+        if (byte_received == 0x7E)
+        {
+            state = STOP_S;
+        }
+        else
+        {
+            state = START;
+        }
+    }
+
+    
+}
+
+void send_disc_message(int fd){
+
+    char buf[255];
+    buf[0] = 0x7E;
+
+    buf[1] = 0x03;
+
+    buf[2] = 0x0B;              
+
+    buf[3] = buf[1] ^ buf[2];
+
+    buf[4] = 0x7E;
+
+    int res = write(fd, buf, 5);
+
+}
+
+
+void send_set_message(int fd)
+{
+    printf("Trying to send set message\n");
+    char buf[255];
+    buf[0] = 0x7E;
+
+    buf[1] = 0x03;
+
+    buf[2] = 0x03;
+
+    buf[3] = buf[1] ^ buf[2];
+
+    buf[4] = 0x7E;
+
+    int res = write(fd, buf, 5);
+
+    printf("Message set sent:  %2s:%d\n", buf, res);
+}
+
+void send_UA_Message(int fd)
+{
+
+    printf("Trying to send message confirmation.\n");
+
+    char buf[255];
+    int res;
+    buf[0] = 0x7E;
+    buf[1] = 0x03;
+    buf[2] = 0x07;
+    buf[3] = buf[1] ^ buf[2];
+    buf[4] = 0x7E;
+
+    res = write(fd, buf, 5);
+
+    printf("Message confirmation sent:  %2s:%d\n", buf, res);
+}
+
+
+
+void send_rr_message(int r, int fd)
+{
+    printf("Trying to send rr message\n");
+    char buf[255];
+    buf[0] = 0x7E;
+
+    buf[1] = 0x03;
+
+    if(r=0)
+    	buf[2] = RR0;
+    else 
+	buf[2] = RR1;
+
+
+
+    buf[3] = buf[1] ^ buf[2];
+
+    buf[4] = 0x7E;
+
+    int res = write(fd, buf, 5);
+
+    printf("Message rr sent:  %2s:%d\n", buf, res);
+}
+
+
+
+void send_rej_message(int r, int fd)
+{
+    printf("Trying to send rej message\n");
+    char buf[255];
+    buf[0] = 0x7E;
+
+    buf[1] = 0x03;
+
+    if(r=0)
+    	buf[2] = REJ0;
+    else 
+	buf[2] = REJ1;
+
+
+
+    buf[3] = buf[1] ^ buf[2];
+
+    buf[4] = 0x7E;
+
+
+    int res = write(fd, buf, 5);
+
+    printf("Message rej sent:  %2s:%d\n", buf, res);
 }
 
 
 
 
-void write_ctrl_frame(int fd, unsigned char controlByte){
 
-  unsigned char frame[5];
-  frame[0] = FLAG_RCV;
-  frame[1] = A_RCV;
-  frame[2] = controlByte;
-  frame[3] = frame[1] ^ frame[2];
-  frame[4] = FLAG_RCV;
+int set_save_port_settings(int fd, struct termios *oldtio)
+{
+    struct termios newtio;
 
-  write(fd, frame, 5);
+    if (fd < 0)
+    {
+        return -1;
+    }
+    if (tcgetattr(fd, oldtio) == -1)
+    { /* save current port settings */
+        perror("tcgetattr");
+        exit(-1);
+    }
+    bzero(&newtio, sizeof(newtio));
+    newtio.c_cflag = BAUDRATE | CS8 | CLOCAL | CREAD;
+    newtio.c_iflag = IGNPAR;
+    newtio.c_oflag = 0;
+
+    /* set input mode (non-canonical, no echo,...) */
+    newtio.c_lflag = 0;
+
+    newtio.c_cc[VTIME] = 0; /* inter-character timer unused */
+    newtio.c_cc[VMIN] = 0;
+
+    tcflush(fd, TCIOFLUSH);
+
+    if (tcsetattr(fd, TCSANOW, &newtio) == -1)
+    {
+        perror("tcsetattr");
+        exit(-1);
+    }
+    return 0;
 }
 
 
-int checkBcc2(unsigned char *buffer, int res){
-
-  unsigned char bcc2 = buffer[0];
+int checkBcc2(char *buffer, int res)
+{
+  char bcc2 = buffer[0];
 
   for (int i = 1; i < res - 1; i++)
   {
     bcc2 ^= buffer[i];
   }
 
-  if (bcc2 == buffer[res - 1])
-  {
-    return 1;
-  }
-  else
-    return 2;
-
-}
-
-
-
-unsigned char *removeHeader(unsigned char *buffer, int bufferLength, int *dataLength)
-{
+  return (bcc2 == buffer[res - 1]);
   
-  unsigned char *noHeader = (unsigned char *)malloc(bufferLength - 4);
-
-  for (int i = 0; i < bufferLength; i++)
-  {
-    noHeader[i] = buffer[i+4];
-  }
-
-  *dataLength = bufferLength - 4;
-
-  return noHeader;
 }
 
-
-
-int reachedEnd(unsigned char *end)
+char calculateBcc2(char *buffer, int length)
 {
-    if (end[0] == C_END)
-      return 1;
-    else
-      return 0;
-    
-    
-}
-
-unsigned char *addHeader(unsigned char *buffer, off_t fileSize, int *packetSize)
-{
-  unsigned char *finalPacket = (unsigned char *)malloc(fileSize + 4);
-  finalPacket[0] = DATA_PACKET;
-  finalPacket[1] = packetNumber % 255;
-  finalPacket[2] = (int)fileSize / 256;
-  finalPacket[3] = (int)fileSize % 256;
+  char bcc2 = buffer[0];
   
-  memcpy(finalPacket + 4, buffer, *packetSize);
-  
-  *packetSize += 4;
-  packetNumber++;
-
-  return finalPacket;
-}
-
-unsigned char *getPacket(unsigned char *buffer, off_t *index, int *packetSize, off_t fileSize)
-{
- 
-  off_t tmpIndex = *index;
-  if (*index + *packetSize > fileSize)
+  for (int i = 1; i < length; i++)
   {
-    *packetSize = fileSize - *index;
-  }
-   unsigned char *packet = (unsigned char *)malloc(*packetSize);
-
-  for (int i=0 ; i < *packetSize; i++, tmpIndex++)
-  {
-    packet[i] = buffer[tmpIndex];
+    bcc2 ^= buffer[i];
   }
 
-  *index = tmpIndex;
-  return packet;
-}
-
-void ua_state_machine(unsigned char *conf, int *state)
-{
-
-  switch (*state)
-  {
-  case 0:
-    if (*conf == FLAG_RCV)
-      *state = 1;
-    break;
-
-  case 1:
-    if (*conf == A_RCV)
-      *state = 2;
-    else
-    {
-      if (*conf == FLAG_RCV)
-        *state = 1;
-      else
-        *state = 0;
-    }
-    break;
-
-  case 2:
-    if (*conf == UA)
-      *state = 3;
-    else
-    {
-      if (*conf == FLAG_RCV)
-        *state = 1;
-      else
-        *state = 0;
-    }
-    break;
-
-  case 3:
-    if (*conf == (A_RCV ^ UA))
-      *state = 4;
-    else
-      *state = 0;
-    break;
-
-  case 4:
-    if (*conf == FLAG_RCV)
-    {
-      stop = 1;
-      alarm(0);
-    }
-    else
-      *state = 0;
-    break;
-  }
-}
-
-unsigned char read_ctrl_frame(int fd)
-{
-  int state = 0;
-  unsigned char c;
-  unsigned char C;
-
-  while (!flag && state != 5)
-  {
-    read(fd, &c, 1);
-    switch (state)
-    {
-    case 0:
-      if (c == FLAG_RCV)
-        state = 1;
-      break;
-      
-    case 1:
-      if (c == A_RCV)
-        state = 2;
-      else
-      {
-        if (c == FLAG_RCV)
-          state = 1;
-        else
-          state = 0;
-      }
-      break;
-      
-    case 2:
-      if (c == RR0 || c == RR1 || c == REJ0 || c == REJ1 || c == DISC)
-      {
-        C = c;
-        state = 3;
-      }
-      else
-      {
-        if (c == FLAG_RCV)
-          state = 1;
-        else
-          state = 0;
-      }
-      break;
-
-    case 3:
-      if (c == (A_RCV ^ C))
-        state = 4;
-      else
-        state = 0;
-      break;
-
-    case 4:
-      if (c == FLAG_RCV)
-      {
-        alarm(0);
-        state = 5;
-        return C;
-      }
-      else
-        state = 0;
-      break;
-    }
-  }
-  return 0xFF;
-}
-
-unsigned char calculateBcc2(unsigned char *mensagem, int size)
-{
-  unsigned char BCC2 = mensagem[0];
-  int i;
-  for (i = 1; i < size; i++)
-  {
-    BCC2 ^= mensagem[i];
-  }
-  return BCC2;
+  return bcc2;
 }
 
 
-unsigned char *getControlPacket(unsigned char controlField, off_t fileSize, unsigned char *fileName, int fileNameLength, int *res)
-{
-  *res = 9 * sizeof(unsigned char) + fileNameLength;
-  unsigned char *package = (unsigned char *)malloc(*res);
 
-  if (controlField == C_START)
-    package[0] = C_START;
-  else
-    package[0] = C_END;
-
-  package[1] = T1;
-  package[2] = L1;
-  package[3] = (fileSize >> 24) & 0xFF;
-  package[4] = (fileSize >> 16) & 0xFF;
-  package[5] = (fileSize >> 8) & 0xFF;
-  package[6] = fileSize & 0xFF;
-  package[7] = T2;
-  package[8] = fileNameLength;
-  
-  for (int k = 0; k < fileNameLength; k++)
-  {
-    package[9 + k] = fileName[k];
-  }
-
-  return package;
-}
