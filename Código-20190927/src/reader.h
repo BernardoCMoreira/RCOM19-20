@@ -13,7 +13,7 @@ void llopen(int fd);
 
 unsigned char *llread(int fd, int *bufferSize);
 
-void llclose(int fd); //
+void llclose(int fd); 
 
 int control_state_machine(int fd, unsigned char controlByte);
 
