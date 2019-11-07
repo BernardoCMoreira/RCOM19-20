@@ -34,24 +34,20 @@ int main(int argc, char **argv)
     exit(-1);
   }
 
-  //starting to count time
-  struct timespec start;
-  struct timespec end;
-
-  clock_gettime(CLOCK_REALTIME, &start);
-
   printf("Establishing connection...\n");
   llopen(fd);
   printf("Connection established\n");
 
   //reading and parsing start packet
+  
 
   printf("Reading start packet...\n");
   startPacket = llread(fd, &startPacketSize);
-
+ 
   int L2Byte = (int)startPacket[8];
   unsigned char *fileName = (unsigned char *)malloc(L2Byte + 1);
 
+  
   for (int i = 0; i < L2Byte; i++)
   {
     fileName[i] = startPacket[9 + i];
@@ -59,8 +55,9 @@ int main(int argc, char **argv)
 
   fileName[L2Byte] = '\0';
 
-  printf("Start packet obtained\n");
 
+  printf("Start packet obtained\n");
+  
   //reading data packets
 
   printf("Reading data packets...\n");
@@ -88,6 +85,7 @@ int main(int argc, char **argv)
     index += sizeWithoutHeader;
   }
 
+  
   printf("Data packets have been read succesfully\n");
 
   //saving to file
@@ -98,18 +96,17 @@ int main(int argc, char **argv)
   fwrite((void *)blob, 1, blobSize, file);
   fclose(file);
 
+
   printf("File done\n");
+
+
+
 
   llclose(fd);
 
-  clock_gettime(CLOCK_REALTIME, &end);
-
-  double elapsed_time = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1E9;
-
-  printf("\nElapsed time: %f\n\n", elapsed_time);
 
   sleep(1);
-
+ 
   close(fd);
   return 0;
 }
@@ -119,9 +116,7 @@ void llclose(int fd)
 
   printf("Trying to close...\n");
   control_state_machine(fd, DISC);
-
   write_ctrl_frame(fd, DISC);
-
   control_state_machine(fd, UA);
   printf("Succesfully closed\n");
 
@@ -131,7 +126,7 @@ void llclose(int fd)
 void llopen(int fd)
 {
 
-  if (tcgetattr(fd, &oldtio) == -1)
+if (tcgetattr(fd, &oldtio) == -1)
   { /* save current port settings */
     perror("tcgetattr");
     exit(-1);
@@ -186,7 +181,6 @@ unsigned char *llread(int fd, int *bufferSize)
   while (state != 6)
   {
     read(fd, &c, 1);
-    printf("byte: %x\n", c);
     switch (state)
     {
     case 0:
@@ -195,10 +189,7 @@ unsigned char *llread(int fd, int *bufferSize)
       break;
     case 1:
       if (c == A_RCV)
-      {
         state = 2;
-        //c = simulateErrorInHeader(10);
-      }
       else
       {
         if (c == FLAG_RCV)
@@ -213,14 +204,12 @@ unsigned char *llread(int fd, int *bufferSize)
         frame = 0;
         c_read = c;
         state = 3;
-        //c = simulateErrorInHeader(10);
       }
       else if (c == C11)
       {
         frame = 1;
         c_read = c;
         state = 3;
-        //c = simulateErrorInHeader(10);
       }
       else
       {
@@ -232,28 +221,14 @@ unsigned char *llread(int fd, int *bufferSize)
       break;
     case 3:
       if (c == (A_RCV ^ c_read))
-      {
-
-        if (checkBcc1(c, c_read))
-        {
-          state = 4;
-        }
-        else
-        {
-          if (frame == 0)
-            write_ctrl_frame(fd, REJ1);
-          else
-            write_ctrl_frame(fd, REJ0);
-          state = 4;
-        }
-      }
+        state = 4;
       else
         state = 0;
       break;
     case 4:
       if (c == FLAG_RCV)
       {
-        if (checkBcc2(buffer, *bufferSize) == 1)
+        if (checkBcc2(buffer, *bufferSize))
         {
           if (frame == 0)
             write_ctrl_frame(fd, RR1);
@@ -265,7 +240,6 @@ unsigned char *llread(int fd, int *bufferSize)
         }
         else
         {
-          //printf("ENTREI\n");
           if (frame == 0)
             write_ctrl_frame(fd, REJ1);
           else
@@ -281,7 +255,7 @@ unsigned char *llread(int fd, int *bufferSize)
       else
       {
         buffer = (unsigned char *)realloc(buffer, ++(*bufferSize));
-        buffer[*bufferSize - 1] = simulateErrorInHeader(c);
+        buffer[*bufferSize - 1] = c;
       }
       break;
     case 5:
@@ -324,21 +298,7 @@ unsigned char *llread(int fd, int *bufferSize)
   return buffer;
 }
 
-int checkBcc1(unsigned char byte, unsigned char controlByte)
-{
-
-  if (byte == A_RCV ^ controlByte)
-    return 1;
-  else
-  {
-    return 0;
-  }
-}
-
-int checkBcc2(unsigned char *buffer, int res)
-{
-
-  //printf("ENTREI\n");
+int checkBcc2(unsigned char *buffer, int res){
 
   unsigned char bcc2 = buffer[0];
 
@@ -352,13 +312,12 @@ int checkBcc2(unsigned char *buffer, int res)
     return 1;
   }
   else
-    return 0;
+    return 2;
+
 }
 
-void write_ctrl_frame(int fd, unsigned char controlByte)
-{
-  /*if (controlByte == REJ1 || controlByte == REJ0)
-    printf("ENTREI\n");*/
+void write_ctrl_frame(int fd, unsigned char controlByte){
+
   unsigned char frame[5];
   frame[0] = FLAG_RCV;
   frame[1] = A_RCV;
@@ -381,7 +340,6 @@ int control_state_machine(int fd, unsigned char controlByte)
     switch (state)
     {
     case 0:
-
       if (byte_received == FLAG_RCV)
         state = 1;
       break;
@@ -416,7 +374,7 @@ int control_state_machine(int fd, unsigned char controlByte)
       else
         state = 0;
       break;
-
+      
     case 4:
       if (byte_received == FLAG_RCV)
       {
@@ -432,12 +390,12 @@ int control_state_machine(int fd, unsigned char controlByte)
 
 unsigned char *removeHeader(unsigned char *buffer, int bufferLength, int *dataLength)
 {
-
+  
   unsigned char *noHeader = (unsigned char *)malloc(bufferLength - 4);
 
   for (int i = 0; i < bufferLength; i++)
   {
-    noHeader[i] = buffer[i + 4];
+    noHeader[i] = buffer[i+4];
   }
 
   *dataLength = bufferLength - 4;
@@ -447,35 +405,10 @@ unsigned char *removeHeader(unsigned char *buffer, int bufferLength, int *dataLe
 
 int reachedEnd(unsigned char *end)
 {
-  if (end[0] == C_END)
-    return 1;
-  else
-    return 0;
-}
-
-unsigned char simulateErrorInHeader(int errorProbability)
-{
-
-  unsigned char res;
-
-  int insertErrorBoolean = randomnessGenerator(errorProbability);
-
-  if (insertErrorBoolean)
-  {
-
-    int randomLetter = rand() % 26;
-    res = (unsigned char)('A' + randomLetter);
-  }
-
-  return res;
-}
-
-int randomnessGenerator(int errorProbability)
-{
-  int randomNumber = rand() % 100 + 1;
-
-  if (randomNumber < errorProbability)
-    return 1;
-  else
-    return 0;
+    if (end[0] == C_END)
+      return 1;
+    else
+      return 0;
+    
+    
 }

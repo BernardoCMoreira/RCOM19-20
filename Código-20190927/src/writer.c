@@ -67,15 +67,6 @@ int main(int argc, char **argv)
 
   fread(mensagem, sizeof(unsigned char), sizeFile, f);
 
-//medindo tempo
-
-	struct timespec startTimer;
-	struct timespec endTimer;
-
-
-	clock_gettime(CLOCK_REALTIME, &startTimer);
-
-
   printf("Establishing connection...\n");
 
   llopen(fd);
@@ -126,15 +117,7 @@ int main(int argc, char **argv)
 
   printf("Successfully closed\n");
 
-	clock_gettime(CLOCK_REALTIME, &endTimer);
-
-	double elapsed_time = (endTimer.tv_sec - startTimer.tv_sec) + (endTimer.tv_nsec - startTimer.tv_nsec) / 1E9;
-
-	printf("\nElapsed time: %f\n\n", elapsed_time);
-
-	
-
-  sleep(2);
+  sleep(1);
 
   close(fd);
   return 0;
@@ -411,6 +394,7 @@ void write_ctrl_frame(int fd, unsigned char controlByte){
   frame[2] = controlByte;
   frame[3] = frame[1] ^ frame[2];
   frame[4] = FLAG_RCV;
+
   write(fd, frame, 5);
 }
 
