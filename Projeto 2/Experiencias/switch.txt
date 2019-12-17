@@ -1,0 +1,37 @@
+
+enable
+8nortel
+configure terminal
+no vlan 20
+no vlan 21
+end
+
+
+# Create vlan20
+configure terminal
+vlan 20
+end
+configure terminal
+interface fastethernet 0/1 #tux21
+switchport mode access
+switchport access vlan 20
+interface fastethernet 0/4 #porta a qual o cabo do tux24 deve ligar no switch
+switchport mode access
+switchport access vlan 30
+end
+
+# Create vlan21
+configure terminal
+vlan 21
+end
+configure terminal
+interface fastethernet 0/12 #porta a qual o cabo do tux22 deve ligar no switch
+switchport mode access
+switchport access vlan 21
+end
+
+configure terminal
+interface fastethernet 0/14 #porta a qual o cabo do tux24 eth1 deve ligar no switch
+switchport mode access
+switchport access vlan 21
+end

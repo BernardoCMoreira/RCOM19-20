@@ -1,0 +1,51 @@
+Tuxy1:
+
+ifconfig eth0 up
+ifconfig eth0 172.16.20.1/24
+
+Tuxy2:
+
+ifconfig eth0 up
+ifconfig eth0 172.16.21.1/24
+
+Tuxy4:
+
+ifconfig eth0 up
+ifconfig eth0 172.16.20.254/24
+
+creating VLAN0 :
+gtkterm:: 
+>enable
+password: 8nortel
+configure terminal
+vlan 20
+end
+show vlan id 20
+
+ADD port1 to vlan:
+configure terminal
+interface fastethernet 0/1
+switchport mode access
+switchport access vlan 20
+end
+ADD port4 to vlan:
+configure terminal
+interface fastethernet 0/4
+switchport mode access
+switchport access vlan 20
+end
+
+creating VLAN1 :
+configure terminal
+vlan 21
+end
+show vlan id 21
+
+ADD PORT13 TO VLAN1
+configure terminal
+interface fastethernet 0/13
+switchport mode access
+switchport access vlan 21
+end
+
+
