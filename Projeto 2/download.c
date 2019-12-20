@@ -19,14 +19,15 @@
 	{
 
 		char answer = 'n';
-
-		if( access( filename, F_OK ) != -1 ) {
+		int num = access( filename, F_OK );
+		if( num!= -1 ) {
 
 			printf("File already exists, do you wish to overwrite it? (Y/N) \n");
-			scanf("%c", &answer);			
+			scanf("%c", &answer);
+			printf("\n");			
 		}
-
-		if(answer == 'y' || answer == 'Y'){
+	
+		 if(answer == 'y' || answer == 'Y' || num==-1){
 
 			printf("Starting donwload of file:\n");
 
