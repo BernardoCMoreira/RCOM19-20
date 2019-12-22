@@ -1,65 +1,21 @@
-	#include <string.h>
-	#include <stdio.h>
-	#include <sys/types.h>
-	#include <sys/socket.h>
-	#include <netinet/in.h>
-	#include <arpa/inet.h>
-	#include <stdlib.h>
-	#include <unistd.h>
-	#include <signal.h>
-	#include <netdb.h>
-	#include <strings.h>
-	#include <ctype.h>
-
-	#define DEFAULT_SERVER_PORT 21
 
 
+#include <string.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
+#include <netdb.h>
+#include <strings.h>
+#include <ctype.h>
 
-	void createFile(int sockfd, char* filename)
-	{
+#define DEFAULT_SERVER_PORT 21
 
-		char answer = 'n';
-		int num = access( filename, F_OK );
-		if( num!= -1 ) {
-
-			printf("File already exists, do you wish to overwrite it? (Y/N) \n");
-			scanf("%c", &answer);
-			printf("\n");			
-		}
-	
-		 if(answer == 'y' || answer == 'Y' || num==-1){
-
-			printf("Starting donwload of file:\n");
-
-			FILE *file = fopen((char *)filename, "wb+");
-
-			char* sockBuffer = (char*)malloc(sizeof(char));
-			memset(sockBuffer,0,sizeof(char));
-
-			int sockBufferRes = 1;
-
-			while (read(sockfd, sockBuffer, 1) > 0) {
-
-				sockBuffer = (char*)malloc(sizeof(char) * (sockBufferRes + 1));
-				memset(sockBuffer,0,sizeof(char) * (sockBufferRes + 1));
-
-				fwrite(sockBuffer, 1, 1, file);
-			}
-
-			fclose(file);
-
-			printf("-File Downloaded Succesfully\n");
-
-		}
-		else if(answer == 'n'|| answer == 'N')
-		{
-			printf("-Operation aborted!\n");
-		}
-		
-	}
-
-
-	void parseUrl(char *url, char *username, char *password, char *hostname, char *path)
+void parseUrl(char *url, char *username, char *password, char *hostname, char *path)
 	{
 	int state = 0;
 	char header[] = "ftp://";
@@ -131,13 +87,12 @@
 	printf("-Username: %s\n-Password: %s\n-Hostname: %s\n-Path :%s\n", username, password, hostname, path);
 	}
 
-
-	void parseFilename(char *path, char *filename){
+void parseFilename(char *path, char *filename){
 
 	int file_index;
 	int i = strlen(path);
 	int my_bool = 0;
-	while(i > 0) {
+	while(i > 0 && my_bool == 0) {
 		if(path[i] == '/') {
 			file_index = i+1;
 			my_bool = 1;
@@ -155,7 +110,8 @@
 	printf("-Filename: %s\n", filename);
 	}
 
-	struct hostent * getIp(char* hostname) {
+
+struct hostent * getIp(char* hostname) {
 
 	struct hostent *h;
 
@@ -172,7 +128,61 @@
 
 
 
-	char* getReply(int sockfd)
+
+void createFile(int sockfd, char* filename)
+{
+	char answer = 'n';
+		int num = access( filename, F_OK );
+		if( num!= -1 ) {
+
+			printf("File already exists, do you wish to overwrite it? (Y/N) \n");
+			scanf("%c", &answer);
+			printf("\n");			
+		}
+	
+		 if(answer == 'y' || answer == 'Y' || num==-1){
+
+			printf("Starting download of file:\n");
+	
+			FILE *file = fopen((char *)filename, "wb+");
+
+			char* bufSocket = (char*)malloc(sizeof(char));
+
+			while ((read(sockfd, bufSocket, 1))>0) {
+				fwrite(bufSocket, 1, 1, file);
+			}
+
+			fclose(file);
+
+			printf("-File Downloaded Succesfully\n");
+
+		}
+		else if(answer == 'n'|| answer == 'N')
+		{
+			printf("-Operation aborted!\n");
+		}
+}
+
+char * buildCmd(char* cmd, char* cmdContent){
+
+	char* res = (char *)malloc(strlen(cmd) + strlen(cmdContent) + 2);
+	memset(res,0,strlen(cmd) + strlen(cmdContent) + 2);
+	strcat(res, cmd);
+	strcat(res, " ");
+	strcat(res, cmdContent);
+	strcat(res, "\n");
+
+	return res;
+
+	}
+
+void sendCmd(int sockfd, char cmd[]){
+
+	write(sockfd, cmd, strlen(cmd));
+
+}
+
+char* getReply(int sockfd)
 	{
 
 	int state = 0;
@@ -237,27 +247,7 @@
 	return NULL;
 	}
 
-	char * buildCmd(char* cmd, char* cmdContent){
-
-	char* res = (char *)malloc(strlen(cmd) + strlen(cmdContent) + 2);
-	memset(res,0,strlen(cmd) + strlen(cmdContent) + 2);
-	strcat(res, cmd);
-	strcat(res, " ");
-	strcat(res, cmdContent);
-	strcat(res, "\n");
-
-	return res;
-
-	}
-
-	void sendCmd(int sockfd, char cmd[]){
-
-	write(sockfd, cmd, strlen(cmd));
-
-	}
-
-
-	int interpretReply(int sockfd, char* filename, int listenPortSockfd, char* backupCmd)
+int interpretReply(int sockfd, char* filename, int listenPortSockfd, char* backupCmd)
 	{
 
 
@@ -293,9 +283,10 @@
 			exit(-1);
 		}
 	}
-	}
+}
 
-	int getListenPort(int socketfd)
+
+int getListenPort(int socketfd)
 	{
 	int state = 0;
 	int i = 0;
@@ -359,47 +350,8 @@
 	return (atoi(p1)* 256 + atoi(p2));
 	}
 
-
-
-	int sendCommandInterpretResponse(int sockfd, char* cmd, char* filename, int listenPortSockfd)
-	{
-	char *code;
-	int first_digit = 0;
-
-	//printf("Command sent: %s", backupCmd);
-
-	while (1)
-	{
-		code = getReply(sockfd);
-		first_digit = code[0] - '0';
-
-		switch (first_digit)
-		{
-		case 1:
-			if(strcmp(cmd, "retr") == 0) {
-				createFile(listenPortSockfd, filename);
-				break;
-			}
-			code = getReply(sockfd);
-			break;
-		case 2:
-			return 0;
-		case 3:
-			return 1;
-		case 4:
-			//sendCmd(sockfd, backupCmd);
-			break;
-		case 5:
-			printf("The command was not accepted and the requested action did not take place.\n");
-			close(sockfd);
-			exit(-1);
-		}
-	}
-	}
-
-
-	int main(int argc, char *argv[])
-	{
+int main(int argc, char **argv)
+{
 	//parse arguments
 	char username[50];
 	char path[50];
@@ -447,7 +399,7 @@
 		exit(0);
 	}
 
-	char *replyCode;
+	char *replyCode = (char*)malloc(sizeof(char)* 3);
 	replyCode = getReply(sockfd);
 
 	/*reply code 220 means:
@@ -539,6 +491,5 @@
 	close(sockfd);
 	exit(1);
 
-
-
-	}
+	
+}
